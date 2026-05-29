@@ -1,3 +1,18 @@
+<!-- BEGIN DISCLAIMER (managed by FFXIWindower author; do not remove) -->
+## ⚠️ Disclaimer — Use at Your Own Risk
+
+This is unofficial, fan-made software for *Final Fantasy XI*. It is **not affiliated with, endorsed by, or supported by Square Enix Holdings Co., Ltd.** FINAL FANTASY is a registered trademark of Square Enix.
+
+**Square Enix's official position is that third-party tools and modifications to the FFXI client are prohibited by the Terms of Service.** Installing or using this software may result in account suspension, account termination, character data loss, or other action taken by Square Enix at their sole discretion.
+
+This software is provided **AS IS, without warranty of any kind**, express or implied — including but not limited to warranties of merchantability, fitness for a particular purpose, and non-infringement. In no event shall the author or contributors be liable for any claim, damages, account action, lost time, lost progress, file corruption, or any other liability arising from the use of, or inability to use, this software.
+
+**By installing, building, or running this software you acknowledge that you understand and accept these risks.**
+
+<!-- END DISCLAIMER -->
+### Additional note — back up your `mcr*.dat` files before first use
+
+This tool rewrites your FFXI macro files (`mcr*.dat`) in place. It writes to a `.new` file first, renames the original to `.bak`, then renames the `.new` into place — so the previous version of each saved page is always one rename away. **However, the `.bak` is overwritten on every subsequent save.** Before relying on this tool, copy your entire `<FFXI install>\USER\<character-id>\` folder to a backup location.
 # FFXI Macro Manager
 
 Standalone Windows desktop app for editing FINAL FANTASY XI's `mcr*.dat`
