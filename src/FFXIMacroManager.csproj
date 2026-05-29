@@ -94,4 +94,24 @@
   </ItemGroup>
 
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- WPF: pulls in MarkupCompilePass1/2 so XAML is compiled into BAML
+       and matching .g.cs partial classes (with x:Name field declarations)
+       are generated. Must come AFTER Microsoft.CSharp.targets.
+       Searches the common locations: legacy .NET Framework MSBuild bin,
+       Visual Studio install, and the dotnet-sdk WindowsDesktop targets. -->
+  <Import Project="$(MSBuildBinPath)\Microsoft.WinFx.targets"
+          Condition="Exists('$(MSBuildBinPath)\Microsoft.WinFx.targets')" />
+  <Import Project="$(MSBuildToolsPath)\Microsoft.WinFx.targets"
+          Condition="!Exists('$(MSBuildBinPath)\Microsoft.WinFx.targets') and Exists('$(MSBuildToolsPath)\Microsoft.WinFx.targets')" />
+  <!-- dotnet-sdk path: WindowsDesktop SDK ships WinFX.targets in its
+       targets folder. Hard-code the SDK base because legacy-style csproj
+       doesn't know about Sdks/. The 8.0.421 version may shift over time
+       so use a wildcard-resolving property if available. -->
+  <PropertyGroup>
+    <_WinFxFromSdk>$(MSBuildSDKsPath)\Microsoft.NET.Sdk.WindowsDesktop\targets\Microsoft.WinFX.targets</_WinFxFromSdk>
+  </PropertyGroup>
+  <Import Project="$(_WinFxFromSdk)"
+          Condition="!Exists('$(MSBuildBinPath)\Microsoft.WinFx.targets')
+                  and !Exists('$(MSBuildToolsPath)\Microsoft.WinFx.targets')
+                  and Exists('$(_WinFxFromSdk)')" />
 </Project>
