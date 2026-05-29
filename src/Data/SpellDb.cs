@@ -225,15 +225,34 @@ namespace FFXIMacroManager.Data
             return list;
         }
 
-        // Returns job abilities whose `type` matches what the job would use.
-        // FFXI doesn't tag JAs by job in the resource files, so this is a
-        // soft filter — the UI lets the user pick "all jobs" anyway.
+        // Returns job abilities filtered by jobId.
+        //   jobId <= 0 -> all jobs (the "(all jobs)" option) — excludes
+        //                 only mob-only entries.
+        //   jobId  > 0 -> only abilities that job natively uses.
+        //
+        // Filtering combines (a) a per-type owner map for categories that
+        // are 100% one job (BloodPactRage = SMN, Scholar = SCH, Waltz =
+        // DNC, etc.) and (b) a per-name map for the 236 generic JobAbility
+        // entries and the 30 PetCommand entries. See Models/JobAbilityMap.cs
+        // for the source-of-truth tables.
         public static List<JobAbility> AbilitiesFor(int jobId)
         {
-            // For now, return everything alpha-sorted. JA-by-job tagging is
-            // not in Windower's resource data; players usually macro JAs by
-            // name anyway and the picker is filterable.
-            var list = new List<JobAbility>(Abilities.Values);
+            var list = new List<JobAbility>();
+            foreach (var a in Abilities.Values)
+            {
+                if (jobId <= 0)
+                {
+                    // "all jobs" — still exclude mob abilities from a
+                    // human-facing list (236 + 30 + the type-tagged ones
+                    // is plenty, no need to surface 120 mob abilities).
+                    if (a.Type == "Monster") continue;
+                }
+                else
+                {
+                    if (!Models.JobAbilityMap.Belongs(a.En, a.Type, jobId)) continue;
+                }
+                list.Add(a);
+            }
             list.Sort(delegate(JobAbility a, JobAbility b) {
                 return string.Compare(a.En, b.En, StringComparison.OrdinalIgnoreCase);
             });

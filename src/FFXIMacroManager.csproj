@@ -67,6 +67,7 @@
     <Compile Include="Models\MacroFile.cs" />
     <Compile Include="Models\Character.cs" />
     <Compile Include="Models\BookTitles.cs" />
+    <Compile Include="Models\JobAbilityMap.cs" />
     <Compile Include="Data\SpellDb.cs" />
   </ItemGroup>
 
