@@ -1,0 +1,272 @@
+<Window
+    x:Class="FFXIMacroManager.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="FFXI Macro Manager"
+    Width="1280" Height="780"
+    MinWidth="1100" MinHeight="660"
+    WindowStartupLocation="CenterScreen">
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>   <!-- top bar: install + character + page -->
+            <RowDefinition Height="*"/>      <!-- main 3-pane area -->
+            <RowDefinition Height="Auto"/>   <!-- status bar -->
+        </Grid.RowDefinitions>
+
+        <!-- ================================================================ -->
+        <!-- TOP BAR  (two rows: install + character / book + page + job)    -->
+        <!-- ================================================================ -->
+        <Border Grid.Row="0" Style="{StaticResource SectionBorder}" Padding="10" Margin="0,0,0,8">
+            <StackPanel>
+
+                <!-- Row 1: install folder + character picker -->
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="280"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" x:Name="BtnPickFolder" Content="Pick FFXI install folder..."
+                            Style="{StaticResource AccentButton}" Padding="14,5" Margin="0,0,10,0"/>
+                    <TextBlock Grid.Column="1" x:Name="LblInstall"
+                               Text="(no folder selected)"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource TextMuted}"
+                               TextTrimming="CharacterEllipsis"
+                               Margin="0,0,10,0"/>
+                    <TextBlock Grid.Column="2" Text="Character: " VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <ComboBox  Grid.Column="3" x:Name="DdCharacter"/>
+                    <Button    Grid.Column="4" x:Name="BtnRenameChar" Content="Rename..."
+                               Padding="10,4" Margin="6,0,0,0"
+                               ToolTip="Set a friendly name for the selected character (saved to %AppData%\FFXIMacroManager\characters.txt)"/>
+                </Grid>
+
+                <!-- Row 2: book / page (big + obvious) + job filter -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="340"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="150"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="220"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Book: "
+                               VerticalAlignment="Center" Margin="0,0,6,0"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource Accent}"/>
+                    <ComboBox  Grid.Column="1" x:Name="DdBook" FontSize="14" Padding="8,5" Margin="0,0,16,0"/>
+
+                    <TextBlock Grid.Column="2" Text="Page: "
+                               VerticalAlignment="Center" Margin="0,0,6,0"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource Accent}"/>
+                    <ComboBox  Grid.Column="3" x:Name="DdPage" FontSize="14" Padding="8,5"/>
+
+                    <TextBlock Grid.Column="5" Text="Job filter: " VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <ComboBox  Grid.Column="6" x:Name="DdJob"/>
+                </Grid>
+
+            </StackPanel>
+        </Border>
+
+        <!-- ================================================================ -->
+        <!-- MAIN 3-PANE LAYOUT                                               -->
+        <!-- ================================================================ -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" MinWidth="540"/>     <!-- macro grid -->
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="1.6*" MinWidth="380"/>   <!-- editor -->
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="1.3*" MinWidth="320"/>   <!-- spell list -->
+            </Grid.ColumnDefinitions>
+
+            <!-- MACRO GRID PANE -->
+            <Border Grid.Column="0" Style="{StaticResource SectionBorder}" Padding="8">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top"
+                               x:Name="LblPageTitle"
+                               Text="Macro Hotbar"
+                               FontSize="14" FontWeight="Bold"
+                               Foreground="{StaticResource Accent}"
+                               Margin="2,2,2,8"/>
+
+                    <Grid DockPanel.Dock="Top" Margin="2,0,2,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="Click a slot to edit. CTRL row + ALT row = full FFXI page."
+                                   Foreground="{StaticResource TextMuted}"
+                                   VerticalAlignment="Center"/>
+                        <Button Grid.Column="2" x:Name="BtnReload" Content="Reload" Padding="10,3" Margin="0,0,6,0"/>
+                        <Button Grid.Column="3" x:Name="BtnSavePage" Content="Save page"
+                                Style="{StaticResource AccentButton}" Padding="14,3"/>
+                    </Grid>
+
+                    <StackPanel>
+                        <TextBlock Text="CTRL row" Foreground="{StaticResource TextMuted}" Margin="6,4,0,2"/>
+                        <UniformGrid x:Name="GridCtrl" Rows="2" Columns="5" Margin="0,0,0,6"/>
+                        <Grid Margin="6,8,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="ALT row"
+                                       Foreground="{StaticResource TextMuted}"/>
+                            <TextBlock Grid.Column="1" x:Name="LblAltHint"
+                                       Text=""
+                                       Foreground="{StaticResource TextDim}"
+                                       FontStyle="Italic"
+                                       Margin="10,0,0,0"/>
+                        </Grid>
+                        <UniformGrid x:Name="GridAlt"  Rows="2" Columns="5"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="4" Background="{StaticResource Border1}"
+                          HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                          Margin="2,0"/>
+
+            <!-- EDITOR PANE -->
+            <Border Grid.Column="2" Style="{StaticResource SectionBorder}" Padding="10">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top"
+                               x:Name="LblEditTitle"
+                               Text="No macro selected"
+                               FontSize="14" FontWeight="Bold"
+                               Foreground="{StaticResource Accent}"
+                               Margin="0,0,0,8"/>
+
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Title (max 8): " VerticalAlignment="Center"/>
+                        <TextBox   Grid.Column="1" x:Name="TxtTitle" MaxLength="8"/>
+                    </Grid>
+
+                    <TextBlock DockPanel.Dock="Top"
+                               Text="6 lines — one command per line. {AT:cat/kind/id} round-trips auto-translate codes."
+                               Foreground="{StaticResource TextMuted}"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,6"/>
+
+                    <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" x:Name="LblDirty"
+                                   Text=""
+                                   Foreground="{StaticResource Red}"
+                                   VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" x:Name="BtnRevert" Content="Revert slot" Padding="12,4" Margin="0,0,6,0"/>
+                        <Button Grid.Column="2" x:Name="BtnClear"  Content="Clear slot"  Padding="12,4"/>
+                    </Grid>
+
+                    <StackPanel x:Name="LineEditorHost" />
+                </DockPanel>
+            </Border>
+
+            <GridSplitter Grid.Column="3" Width="4" Background="{StaticResource Border1}"
+                          HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                          Margin="2,0"/>
+
+            <!-- SPELL/JA LIST PANE -->
+            <Border Grid.Column="4" Style="{StaticResource SectionBorder}" Padding="8">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top"
+                               Text="Action library"
+                               FontSize="14" FontWeight="Bold"
+                               Foreground="{StaticResource Accent}"
+                               Margin="2,2,2,8"/>
+
+                    <Grid DockPanel.Dock="Top" Margin="2,0,2,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <ComboBox Grid.Column="0" x:Name="DdLibKind" Width="140" Margin="0,0,6,0">
+                            <ComboBoxItem Content="Spells"        IsSelected="True"/>
+                            <ComboBoxItem Content="Job abilities"/>
+                            <ComboBoxItem Content="Weapon skills"/>
+                            <ComboBoxItem Content="Targets"/>
+                        </ComboBox>
+                        <TextBox Grid.Column="1" x:Name="TxtSearch"/>
+                    </Grid>
+
+                    <!-- Target picker: when you double-click a spell/JA/WS in
+                         the list below, this is the target token that gets
+                         appended.  Default <t> works for most macros. -->
+                    <Grid DockPanel.Dock="Top" Margin="2,0,2,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Target: "
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource Accent}"
+                                   FontWeight="Bold"
+                                   Margin="0,0,6,0"/>
+                        <ComboBox Grid.Column="1" x:Name="DdTarget">
+                            <ComboBoxItem Content="&lt;t&gt; — current target"   Tag="&lt;t&gt;" IsSelected="True"/>
+                            <ComboBoxItem Content="&lt;me&gt; — self"            Tag="&lt;me&gt;"/>
+                            <ComboBoxItem Content="&lt;stnpc&gt; — sub-target NPC"  Tag="&lt;stnpc&gt;"/>
+                            <ComboBoxItem Content="&lt;stpc&gt; — sub-target PC"    Tag="&lt;stpc&gt;"/>
+                            <ComboBoxItem Content="&lt;stal&gt; — sub-target ally"  Tag="&lt;stal&gt;"/>
+                            <ComboBoxItem Content="&lt;bt&gt; — battle target"      Tag="&lt;bt&gt;"/>
+                            <ComboBoxItem Content="&lt;lastst&gt; — last sub-target" Tag="&lt;lastst&gt;"/>
+                            <ComboBoxItem Content="&lt;p0&gt; — party slot 0 (you)"  Tag="&lt;p0&gt;"/>
+                            <ComboBoxItem Content="&lt;p1&gt; — party slot 1"        Tag="&lt;p1&gt;"/>
+                            <ComboBoxItem Content="&lt;p2&gt; — party slot 2"        Tag="&lt;p2&gt;"/>
+                            <ComboBoxItem Content="&lt;p3&gt; — party slot 3"        Tag="&lt;p3&gt;"/>
+                            <ComboBoxItem Content="&lt;p4&gt; — party slot 4"        Tag="&lt;p4&gt;"/>
+                            <ComboBoxItem Content="&lt;p5&gt; — party slot 5"        Tag="&lt;p5&gt;"/>
+                            <ComboBoxItem Content="(no target — append nothing)"     Tag=""/>
+                        </ComboBox>
+                    </Grid>
+
+                    <TextBlock DockPanel.Dock="Top"
+                               x:Name="LblLibHint"
+                               Text="Double-click any entry to insert into the current line."
+                               Foreground="{StaticResource TextMuted}"
+                               TextWrapping="Wrap"
+                               Margin="2,0,2,6"/>
+
+                    <ListBox x:Name="LbLibrary"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- ================================================================ -->
+        <!-- STATUS BAR                                                       -->
+        <!-- ================================================================ -->
+        <Border Grid.Row="2" Style="{StaticResource SectionBorder}" Padding="8,4" Margin="0,8,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" x:Name="LblStatus"
+                           Text="Ready."
+                           Foreground="{StaticResource TextMuted}"/>
+                <TextBlock Grid.Column="1"
+                           Text="FFXI Macro Manager  ·  v1.0  ·  GSUI-style"
+                           Foreground="{StaticResource TextDim}"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

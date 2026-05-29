@@ -1,0 +1,10 @@
+src/bin/
+src/obj/
+*.pdb
+verify.exe
+dump.exe
+*.bak
+*.new
+# Per-user VS files
+.vs/
+*.user
