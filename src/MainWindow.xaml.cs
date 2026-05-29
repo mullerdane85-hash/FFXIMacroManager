@@ -666,9 +666,15 @@ namespace FFXIMacroManager
             }
             LblAltHint.Text = hint;
 
-            // Reselect the previously-selected macro if still in range
-            if (_activeMacroIndex >= 0 && _activeMacroIndex < MacroFile.MACRO_COUNT)
-                SelectMacro(_activeMacroIndex);
+            // NOTE: we deliberately do NOT call SelectMacro(_activeMacroIndex)
+            // here. The earlier "reselect previous" call caused a recursive
+            // loop (SelectMacro -> RenderAllSlots -> SelectMacro), and on
+            // the recursive entry CommitEditorToModel saw a freshly-built
+            // empty editor and overwrote the macro model with empty
+            // strings. Net effect: clicking any populated slot wiped its
+            // content. Slot highlight (active vs idle) is rendered by
+            // RenderSlotButton based on _activeMacroIndex directly, so no
+            // SelectMacro call is needed to keep the visuals in sync.
         }
 
         private void RenderSlotButton(int idx)
