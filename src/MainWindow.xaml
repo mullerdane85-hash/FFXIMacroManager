@@ -264,7 +264,7 @@
                            Text="Ready."
                            Foreground="{StaticResource TextMuted}"/>
                 <TextBlock Grid.Column="1"
-                           Text="FFXI Macro Manager  ·  v1.0  ·  GSUI-style"
+                           Text="FFXI Macro Manager  ·  v1.1  ·  fixed slot-click freeze"
                            Foreground="{StaticResource TextDim}"/>
             </Grid>
         </Border>

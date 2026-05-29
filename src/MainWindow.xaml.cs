@@ -48,6 +48,20 @@ namespace FFXIMacroManager
 
         private Button[] _slotButtons = new Button[MacroFile.MACRO_COUNT];
 
+        // When true, ALL TextChanged handlers (TxtTitle and the 6 line
+        // textboxes) short-circuit instead of running CommitEditorToModel
+        // / dirty-tracking. We set this true around any programmatic
+        // population (SelectMacro, ClearEditor) so the cascade of
+        // TextBox.Text = "..." assignments doesn't re-enter the model
+        // commit path with stale buffer contents. Without it, the
+        // sequence "TxtTitle.Text = m.Title -> TextChanged fires ->
+        // CommitEditorToModel reads the freshly-built empty line
+        // textboxes -> overwrites m.Lines with empty strings -> marks
+        // every line dirty -> RenderSlotButton + UpdateDirtyLabel ->
+        // can lock the UI thread" was wiping macro content on click
+        // and (per user report) freezing the app.
+        private bool _loading = false;
+
         // Where settings persist
         private static readonly string SETTINGS_PATH = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -749,27 +763,50 @@ namespace FFXIMacroManager
         // ------------------------------------------------------------------
         private void SelectMacro(int idx)
         {
-            // Commit any pending edits into the model first so we don't lose them.
-            CommitEditorToModel();
-
-            _activeMacroIndex = idx;
-            BuildLineEditor();
-            RenderAllSlots(); // re-highlight selection
-
-            if (_activeFile == null || idx < 0 || idx >= _activeFile.Macros.Count) {
-                LblEditTitle.Text = "No macro selected";
-                TxtTitle.Text = "";
-                return;
-            }
-            var m = _activeFile.Macros[idx];
-            LblEditTitle.Text = "Editing " + m.HotkeyLabel + "  ·  slot #" + (idx + 1);
-            TxtTitle.Text = m.Title ?? "";
-            for (int i = 0; i < MacroFile.LINE_COUNT && i < m.Lines.Count; i++)
+            // Wrap the whole population in try/catch + a top-level
+            // _loading flag. The flag is the important part — see the
+            // field comment above. The try/catch is a safety net so any
+            // unexpected exception surfaces as a chat-bar message instead
+            // of silently freezing or crashing the app.
+            try
             {
-                _lineBoxes[i].Text = m.Lines[i].Text ?? "";
-                _lineBoxes[i].Tag = false; // not yet dirty since user hasn't typed
+                // Commit the OUTGOING slot's edits (still active until we
+                // overwrite _activeMacroIndex below). Must happen BEFORE
+                // _loading flips, since real edits should be saved.
+                CommitEditorToModel();
+
+                _loading = true;
+                _activeMacroIndex = idx;
+                BuildLineEditor();      // creates fresh empty textboxes
+                RenderAllSlots();       // re-highlight selection
+
+                if (_activeFile == null || idx < 0 || idx >= _activeFile.Macros.Count)
+                {
+                    LblEditTitle.Text = "No macro selected";
+                    TxtTitle.Text = "";
+                    LblDirty.Text  = "";
+                    return;
+                }
+
+                var m = _activeFile.Macros[idx];
+                LblEditTitle.Text = "Editing " + m.HotkeyLabel + "  ·  slot #" + (idx + 1);
+                TxtTitle.Text     = m.Title ?? "";
+
+                for (int i = 0; i < MacroFile.LINE_COUNT && i < m.Lines.Count; i++)
+                {
+                    _lineBoxes[i].Text = m.Lines[i].Text ?? "";
+                    _lineBoxes[i].Tag  = false;   // not user-typed
+                }
             }
-            UpdateDirtyLabel();
+            catch (Exception ex)
+            {
+                LblStatus.Text = "SelectMacro(" + idx + ") failed: " + ex.GetType().Name + ": " + ex.Message;
+            }
+            finally
+            {
+                _loading = false;
+                UpdateDirtyLabel();
+            }
         }
 
         private void BuildLineEditor()
@@ -794,7 +831,16 @@ namespace FFXIMacroManager
                 var tb = new TextBox();
                 tb.MaxLength = 60; // 61-byte slot minus null terminator
                 tb.GotFocus += (_, __) => _focusedLine = captured;
-                tb.TextChanged += (_, __) => { _lineBoxes[captured].Tag = true; UpdateDirtyLabel(); };
+                tb.TextChanged += (_, __) =>
+                {
+                    // Suppress during programmatic population (SelectMacro
+                    // / ClearEditor sets _lineBoxes[i].Text from m.Lines,
+                    // which fires this handler — but those changes aren't
+                    // user edits and shouldn't mark the line dirty).
+                    if (_loading) return;
+                    _lineBoxes[captured].Tag = true;
+                    UpdateDirtyLabel();
+                };
                 Grid.SetColumn(tb, 1);
                 row.Children.Add(tb);
 
@@ -805,15 +851,27 @@ namespace FFXIMacroManager
 
         private void ClearEditor()
         {
-            BuildLineEditor();
-            TxtTitle.Text = "";
-            LblEditTitle.Text = "No macro selected";
-            LblDirty.Text = "";
+            try
+            {
+                _loading = true;
+                BuildLineEditor();
+                TxtTitle.Text = "";
+                LblEditTitle.Text = "No macro selected";
+                LblDirty.Text = "";
+            }
+            finally { _loading = false; }
         }
 
         private void TxtTitle_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
         {
-            // Update preview live
+            // Suppress during programmatic population. This is THE handler
+            // that was causing the freeze/data-wipe on slot click: when
+            // SelectMacro did `TxtTitle.Text = m.Title`, this fired and
+            // called CommitEditorToModel against the freshly-rebuilt
+            // empty line textboxes, which wrote empty strings back into
+            // m.Lines. The whole cascade now no-ops while _loading is true.
+            if (_loading) return;
+
             CommitEditorToModel();
             if (_activeMacroIndex >= 0) RenderSlotButton(_activeMacroIndex);
             UpdateDirtyLabel();
