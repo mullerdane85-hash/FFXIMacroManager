@@ -69,6 +69,17 @@ namespace FFXIMacroManager
             DdJob.SelectionChanged       += DdJob_SelectionChanged;
             DdBook.SelectionChanged      += DdBookOrPage_SelectionChanged;
             DdPage.SelectionChanged      += DdBookOrPage_SelectionChanged;
+
+            // Arrow-key cycling on every selector. Clicking a ComboBox once
+            // is enough to focus it; from there Up / Down cycle through the
+            // values silently without re-opening the popup. Saves a click
+            // per change when sweeping through books / pages while editing.
+            WireArrowKeyCycling(DdCharacter);
+            WireArrowKeyCycling(DdBook);
+            WireArrowKeyCycling(DdPage);
+            WireArrowKeyCycling(DdJob);
+            WireArrowKeyCycling(DdLibKind);   // bonus: cycle Spells/JA/WS/Targets
+            WireArrowKeyCycling(DdTarget);    // bonus: cycle target tokens
             DdLibKind.SelectionChanged   += (_, __) => RefreshLibrary();
             TxtSearch.TextChanged        += (_, __) => RefreshLibrary();
             LbLibrary.MouseDoubleClick   += LbLibrary_MouseDoubleClick;
@@ -84,6 +95,50 @@ namespace FFXIMacroManager
             PopulateBookPage(null);
             // Job dropdown is populated after spell data loads
             Loaded += MainWindow_Loaded;
+        }
+
+        // ------------------------------------------------------------------
+        // Arrow-key cycling helper
+        // ------------------------------------------------------------------
+        // Wire a ComboBox so Up/Down arrow keys cycle the SelectedIndex
+        // silently (no popup flash) when the dropdown is closed.
+        //
+        // Why a PreviewKeyDown handler instead of the built-in ComboBox
+        // arrow handling: WPF's default sometimes opens the popup on the
+        // first arrow press and the visual flicker is annoying when the
+        // user is rapidly sweeping books/pages. Catching the key in
+        // PreviewKeyDown and marking it Handled lets us cycle the value
+        // without involving the popup at all. When the popup IS already
+        // open (user pressed F4 or Alt+Down deliberately), we step out and
+        // let WPF's standard list-navigation behavior do its thing.
+        //
+        // Page Up / Page Down are also wired up — they jump 5 items at a
+        // time, which is handy on the 20-page book selector.
+        //
+        // Home / End jump to the first / last entry.
+        private static void WireArrowKeyCycling(ComboBox box)
+        {
+            box.PreviewKeyDown += (s, e) =>
+            {
+                if (box.IsDropDownOpen) return;        // let the open popup handle it
+                if (box.Items.Count == 0) return;
+
+                int delta = 0;
+                int abs   = -1;
+                if      (e.Key == Key.Down)     delta = +1;
+                else if (e.Key == Key.Up)       delta = -1;
+                else if (e.Key == Key.PageDown) delta = +5;
+                else if (e.Key == Key.PageUp)   delta = -5;
+                else if (e.Key == Key.Home)     abs   = 0;
+                else if (e.Key == Key.End)      abs   = box.Items.Count - 1;
+                else return;
+
+                int next = (abs >= 0) ? abs : box.SelectedIndex + delta;
+                if (next < 0)                next = 0;
+                if (next >= box.Items.Count) next = box.Items.Count - 1;
+                if (next != box.SelectedIndex) box.SelectedIndex = next;
+                e.Handled = true;
+            };
         }
 
         // ------------------------------------------------------------------

@@ -8,3 +8,5 @@ dump.exe
 # Per-user VS files
 .vs/
 *.user
+# Build script transient output
+build_out.txt
