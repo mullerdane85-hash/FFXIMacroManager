@@ -20,13 +20,14 @@
         <Border Grid.Row="0" Style="{StaticResource SectionBorder}" Padding="10" Margin="0,0,0,8">
             <StackPanel>
 
-                <!-- Row 1: install folder + character picker -->
+                <!-- Row 1: install folder + character picker + backup -->
                 <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="280"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Button Grid.Column="0" x:Name="BtnPickFolder" Content="Pick FFXI install folder..."
@@ -42,6 +43,9 @@
                     <Button    Grid.Column="4" x:Name="BtnRenameChar" Content="Rename..."
                                Padding="10,4" Margin="6,0,0,0"
                                ToolTip="Set a friendly name for the selected character (saved to %AppData%\FFXIMacroManager\characters.txt)"/>
+                    <Button    Grid.Column="5" x:Name="BtnBackup" Content="Back up..."
+                               Padding="10,4" Margin="6,0,0,0"
+                               ToolTip="Snapshot every mcr* file for the active character into &#x0a;%USERPROFILE%\Documents\FFXIMacroManager_backups\&#x0a;Recommended before any save."/>
                 </Grid>
 
                 <!-- Row 2: book / page (big + obvious) + job filter -->
@@ -346,7 +350,7 @@
                            Text="Ready."
                            Foreground="{StaticResource TextMuted}"/>
                 <TextBlock Grid.Column="1"
-                           Text="FFXI Macro Manager  ·  v1.5  ·  &lt;wait&gt; stepper"
+                           Text="FFXI Macro Manager  ·  v1.6  ·  Back up button"
                            Foreground="{StaticResource TextDim}"/>
             </Grid>
         </Border>

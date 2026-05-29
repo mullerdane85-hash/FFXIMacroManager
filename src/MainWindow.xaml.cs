@@ -74,6 +74,7 @@ namespace FFXIMacroManager
             // Hook events
             BtnPickFolder.Click  += BtnPickFolder_Click;
             BtnRenameChar.Click  += BtnRenameChar_Click;
+            BtnBackup.Click      += BtnBackup_Click;
             BtnReload.Click      += (_, __) => ReloadActivePage();
             BtnSavePage.Click    += BtnSavePage_Click;
             BtnRevert.Click      += BtnRevert_Click;
@@ -506,6 +507,109 @@ namespace FFXIMacroManager
         // Prompt the user for a friendly name for the currently-selected
         // character. Persisted to %APPDATA%\FFXIMacroManager\characters.txt
         // so the name sticks across runs.
+        // -----------------------------------------------------------------
+        // BACK UP MACROS
+        // -----------------------------------------------------------------
+        // Snapshots every "mcr*" file (mcr.dat / mcr1.dat .. mcr199.dat /
+        // mcr.sys / mcr.ttl / any .bak that's already there) for the
+        // currently-selected character into a timestamped folder under
+        // %USERPROFILE%\Documents\FFXIMacroManager_backups\. Non-destructive
+        // -- the original files in the FFXI install folder are untouched.
+        //
+        // Recommended workflow:
+        //   1. In FFXI: Macros menu -> Macro List -> Save All to Server
+        //      (covers worst-case "the whole client folder is toast")
+        //   2. In this app: click "Back up..." (snapshot to disk, fast)
+        //   3. Edit + Save Page as usual
+        //
+        // If the user has never picked a character, we just complain and
+        // bail -- no install folder = no character folder = nothing to do.
+        private void BtnBackup_Click(object sender, RoutedEventArgs e)
+        {
+            if (_activeChar == null)
+            {
+                LblStatus.Text = "Pick a character before backing up.";
+                return;
+            }
+            string src = _activeChar.FolderPath;
+            if (string.IsNullOrEmpty(src) || !Directory.Exists(src))
+            {
+                LblStatus.Text = "Character folder is missing: " + src;
+                return;
+            }
+
+            // Sanitise the display name so it's safe to put in a path.
+            string charLabel = NameFor(_activeChar) ?? _activeChar.FolderId ?? "char";
+            foreach (char bad in Path.GetInvalidFileNameChars())
+                charLabel = charLabel.Replace(bad, '_');
+
+            string ts = DateTime.Now.ToString("yyyy-MM-dd_HHmmss");
+            string destRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "FFXIMacroManager_backups");
+            string dest = Path.Combine(destRoot,
+                charLabel + "_" + _activeChar.FolderId + "_" + ts);
+
+            try
+            {
+                Directory.CreateDirectory(dest);
+                int copied = 0;
+                long totalBytes = 0;
+                foreach (var f in Directory.GetFiles(src))
+                {
+                    string name = Path.GetFileName(f);
+                    // Pull every macro-related file: mcr.dat, mcrN.dat,
+                    // mcr.sys (system flags), mcr.ttl (book titles),
+                    // any *.bak the editor itself created.
+                    if (name.StartsWith("mcr", StringComparison.OrdinalIgnoreCase)
+                        || name.EndsWith(".bak", StringComparison.OrdinalIgnoreCase))
+                    {
+                        File.Copy(f, Path.Combine(dest, name), true);
+                        copied++;
+                        totalBytes += new FileInfo(f).Length;
+                    }
+                }
+                LblStatus.Text = string.Format(
+                    "Backed up {0} file(s), {1:N0} bytes to {2}",
+                    copied, totalBytes, dest);
+
+                var ans = MessageBox.Show(this,
+                    string.Format(
+                        "Backed up {0} macro file(s) for {1}.\n\nDestination:\n{2}\n\nOpen the backup folder in Explorer?",
+                        copied, charLabel, dest),
+                    "Backup complete",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Information);
+                if (ans == MessageBoxResult.Yes)
+                {
+                    // UseShellExecute=true is required to launch Explorer
+                    // on a directory path with the default associations.
+                    try
+                    {
+                        System.Diagnostics.Process.Start(
+                            new System.Diagnostics.ProcessStartInfo
+                            {
+                                FileName        = dest,
+                                UseShellExecute = true,
+                            });
+                    }
+                    catch (Exception openEx)
+                    {
+                        LblStatus.Text = "Backup saved, but couldn't open Explorer: " + openEx.Message;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this,
+                    "Backup FAILED:\n\n" + ex.Message,
+                    "FFXI Macro Manager",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                LblStatus.Text = "Backup failed: " + ex.Message;
+            }
+        }
+
         private void BtnRenameChar_Click(object sender, RoutedEventArgs e)
         {
             var item = DdCharacter.SelectedItem as ComboBoxItem;

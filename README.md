@@ -10,9 +10,15 @@ This software is provided **AS IS, without warranty of any kind**, express or im
 **By installing, building, or running this software you acknowledge that you understand and accept these risks.**
 
 <!-- END DISCLAIMER -->
-### Additional note — back up your `mcr*.dat` files before first use
+### Before you use this — back up your macros
 
-This tool rewrites your FFXI macro files (`mcr*.dat`) in place. It writes to a `.new` file first, renames the original to `.bak`, then renames the `.new` into place — so the previous version of each saved page is always one rename away. **However, the `.bak` is overwritten on every subsequent save.** Before relying on this tool, copy your entire `<FFXI install>\USER\<character-id>\` folder to a backup location.
+This tool edits your FFXI `mcr*.dat` macro files directly. Two backups are recommended before you save anything you care about:
+
+1. **Back up to the Square Enix server (in-game).** Open the Macros menu in FFXI, pick **Macro List → Save All to Server**. Your macros are uploaded to your character on the SE side and can be restored later via **Load All from Server**. This is the bulletproof option: even total local file corruption can't touch a server backup. SE limits this to roughly one save per ~30 minutes per character, so do it BEFORE you start editing.
+2. **Back up the local files.** Either copy `<FFXI install>\USER\<character-id>\` somewhere safe yourself, OR click the **"Back up..."** button in the app's top bar (next to *Rename...*). The button snapshots every `mcr*` file for the active character into `<Documents>\FFXIMacroManager_backups\<character>_<timestamp>\` with one click.
+
+The app's save routine writes to a `.new` temp file first, renames the original to `.bak`, then renames `.new` into place — so the immediately-previous version of each saved page is always one rename away. **However, that `.bak` is overwritten on every subsequent save**, so it only protects you against the last edit. Use the two backups above for everything older than the last save.
+
 # FFXI Macro Manager
 
 Standalone Windows desktop app for editing FINAL FANTASY XI's `mcr*.dat`
