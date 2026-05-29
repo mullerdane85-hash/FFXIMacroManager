@@ -194,12 +194,13 @@
             <Border Grid.Column="4" Style="{StaticResource SectionBorder}" Padding="8">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>   <!-- title -->
-                        <RowDefinition Height="Auto"/>   <!-- kind + search -->
-                        <RowDefinition Height="Auto"/>   <!-- weapon filter (WS only) -->
-                        <RowDefinition Height="Auto"/>   <!-- target picker -->
-                        <RowDefinition Height="Auto"/>   <!-- hint -->
-                        <RowDefinition Height="*"/>      <!-- list -->
+                        <RowDefinition Height="Auto"/>   <!-- 0: title -->
+                        <RowDefinition Height="Auto"/>   <!-- 1: kind + search -->
+                        <RowDefinition Height="Auto"/>   <!-- 2: weapon filter (WS only) -->
+                        <RowDefinition Height="Auto"/>   <!-- 3: target picker -->
+                        <RowDefinition Height="Auto"/>   <!-- 4: wait stepper + append -->
+                        <RowDefinition Height="Auto"/>   <!-- 5: hint -->
+                        <RowDefinition Height="*"/>      <!-- 6: list -->
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0" Text="Action library"
@@ -276,14 +277,57 @@
                         </ComboBox>
                     </Grid>
 
-                    <TextBlock Grid.Row="4"
+                    <!-- Row: <wait> stepper. Append " <wait N>" to a line.
+                         FFXI's wait command works two ways: standalone
+                         "/wait N" line, or inline "<wait N>" at the end
+                         of a command line — both pause the macro for N
+                         seconds before the next line executes. We use the
+                         inline form because that's what the existing macro
+                         in the user's mcr199.dat uses.
+                         Value: 0 = no wait appended. Stepper goes 0..30
+                         in 0.5 second increments. Whole numbers display
+                         without a trailing ".0" so the macro reads as
+                         "<wait 2>" not "<wait 2.0>". -->
+                    <Grid Grid.Row="4" Margin="2,0,2,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Wait: "
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource Accent}"
+                                   FontWeight="Bold"
+                                   Margin="0,0,6,0"/>
+                        <Button   Grid.Column="1" x:Name="BtnWaitMinus"
+                                  Content="−" Width="28" Padding="0"
+                                  ToolTip="Decrease wait by 0.5 (min 0)"
+                                  Margin="0,0,2,0"/>
+                        <TextBox  Grid.Column="2" x:Name="TxtWait"
+                                  Width="48" TextAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Text="0"
+                                  ToolTip="Wait seconds (0 = no wait appended)"/>
+                        <Button   Grid.Column="3" x:Name="BtnWaitPlus"
+                                  Content="+" Width="28" Padding="0"
+                                  ToolTip="Increase wait by 0.5 (max 30)"
+                                  Margin="2,0,8,0"/>
+                        <Button   Grid.Column="5" x:Name="BtnWaitAppend"
+                                  Content="Append to line" Padding="10,2"
+                                  ToolTip="Append &lt;wait N&gt; to the currently-focused line"/>
+                    </Grid>
+
+                    <TextBlock Grid.Row="5"
                                x:Name="LblLibHint"
                                Text="Double-click any entry to insert into the current line."
                                Foreground="{StaticResource TextMuted}"
                                TextWrapping="Wrap"
                                Margin="2,0,2,6"/>
 
-                    <ListBox Grid.Row="5" x:Name="LbLibrary"
+                    <ListBox Grid.Row="6" x:Name="LbLibrary"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
                 </Grid>
             </Border>
@@ -302,7 +346,7 @@
                            Text="Ready."
                            Foreground="{StaticResource TextMuted}"/>
                 <TextBlock Grid.Column="1"
-                           Text="FFXI Macro Manager  ·  v1.4  ·  weapon filter + layout fix"
+                           Text="FFXI Macro Manager  ·  v1.5  ·  &lt;wait&gt; stepper"
                            Foreground="{StaticResource TextDim}"/>
             </Grid>
         </Border>

@@ -85,6 +85,20 @@ namespace FFXIMacroManager
             DdPage.SelectionChanged      += DdBookOrPage_SelectionChanged;
             // Weapon filter — populated in PopulateWeaponDropdown after data load.
             DdWeapon.SelectionChanged    += (_, __) => RefreshLibrary();
+
+            // Wait stepper. + and - mutate _waitSeconds in 0.5 steps;
+            // the TextBox shows the value and accepts manual input on
+            // lose-focus (typed values parsed in TxtWait_LostFocus).
+            BtnWaitMinus.Click  += (_, __) => StepWait(-0.5);
+            BtnWaitPlus.Click   += (_, __) => StepWait(+0.5);
+            BtnWaitAppend.Click += BtnWaitAppend_Click;
+            TxtWait.LostFocus   += TxtWait_LostFocus;
+            // Ctrl+wheel on the value box also steps (UX nicety).
+            TxtWait.PreviewMouseWheel += (_, e) =>
+            {
+                StepWait(e.Delta > 0 ? +0.5 : -0.5);
+                e.Handled = true;
+            };
             // Library-kind change toggles the weapon-row visibility AND
             // refreshes the listing. Order matters: visibility first so
             // any layout knock-on settles before the listbox repaints.
@@ -1024,14 +1038,102 @@ namespace FFXIMacroManager
             return it == null ? "<t>" : (it.Tag as string ?? "<t>");
         }
 
+        // ------------------------------------------------------------------
+        // Wait stepper (appends " <wait N>" to a line)
+        // ------------------------------------------------------------------
+        // 0 = no wait appended. Stored as double so 0.5-step UI works
+        // and decimal values round-trip cleanly to the macro file.
+        private double _waitSeconds = 0.0;
+        private const double WaitMax = 30.0;
+
+        // Format a wait value the way an FFXI macro should see it:
+        //   2.0 -> "2"   (no trailing .0)
+        //   2.5 -> "2.5"
+        //   0.5 -> "0.5"
+        // "0.##" trims trailing zeros automatically and the invariant
+        // culture stops a "," from being inserted in locales that use
+        // comma as the decimal separator.
+        private static string FormatWait(double seconds)
+        {
+            return seconds.ToString("0.##",
+                System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        // Returns " <wait N>" or "" if no wait is set.
+        // Always prefixed with a single space so it appends cleanly to
+        // an existing line; caller doesn't add its own space.
+        private string WaitSuffix()
+        {
+            if (_waitSeconds <= 0.0) return "";
+            return " <wait " + FormatWait(_waitSeconds) + ">";
+        }
+
+        // Adjust the wait by delta and refresh the textbox. Clamps to
+        // [0, WaitMax]. Snaps to 0.5 grid to keep the display clean.
+        private void StepWait(double delta)
+        {
+            double v = _waitSeconds + delta;
+            // snap to nearest 0.5
+            v = System.Math.Round(v * 2.0) / 2.0;
+            if (v < 0.0)      v = 0.0;
+            if (v > WaitMax)  v = WaitMax;
+            _waitSeconds = v;
+            TxtWait.Text = FormatWait(v);
+        }
+
+        // Parse the textbox after the user types a value and tabs away.
+        // Accepts integers, decimals, and rejects junk (resets to last value).
+        private void TxtWait_LostFocus(object sender, RoutedEventArgs e)
+        {
+            double parsed;
+            string txt = (TxtWait.Text ?? "").Trim();
+            if (double.TryParse(txt,
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out parsed))
+            {
+                if (parsed < 0.0)     parsed = 0.0;
+                if (parsed > WaitMax) parsed = WaitMax;
+                _waitSeconds = parsed;
+            }
+            // Re-format either way so "1.0" becomes "1" etc.
+            TxtWait.Text = FormatWait(_waitSeconds);
+        }
+
+        // Append " <wait N>" to whatever line is currently focused. Used
+        // by the "Append to line" button so the user can add a wait to a
+        // line they typed by hand (like the /equipset lines that don't
+        // come from double-click insert).
+        private void BtnWaitAppend_Click(object sender, RoutedEventArgs e)
+        {
+            string suffix = WaitSuffix();
+            if (string.IsNullOrEmpty(suffix))
+            {
+                LblStatus.Text = "Wait is 0 — nothing appended. Use + to set a wait time first.";
+                return;
+            }
+            if (_focusedLine < 0 || _focusedLine >= _lineBoxes.Length) _focusedLine = 0;
+            var box = _lineBoxes[_focusedLine];
+            if (box == null) return;
+            // Skip if the line already ends with the same suffix (avoids
+            // double-tap producing "<wait 1> <wait 1>").
+            string current = box.Text ?? "";
+            if (current.EndsWith(suffix.TrimStart())) return;
+            box.Text = current + suffix;
+            box.Focus();
+            box.CaretIndex = box.Text.Length;
+        }
+
         // Build the right-hand macro fragment that's pasted into a line:
-        //   "/ma \"Cure III\" <stal>"
-        // Target token is whatever the Target dropdown currently shows.
+        //   "/ma \"Cure III\" <stal> <wait 2>"
+        // Target token is whatever the Target dropdown shows; wait suffix
+        // is appended when the Wait stepper is non-zero.
         private string ComposeCommand(string prefix, string actionName)
         {
             string target = SelectedTargetToken();
             string head = prefix + " \"" + actionName + "\"";
-            return string.IsNullOrEmpty(target) ? head : (head + " " + target);
+            string body = string.IsNullOrEmpty(target) ? head : (head + " " + target);
+            return body + WaitSuffix();
         }
 
         private void RefreshLibrary()
