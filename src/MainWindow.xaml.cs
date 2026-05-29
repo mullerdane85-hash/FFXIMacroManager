@@ -305,9 +305,16 @@ namespace FFXIMacroManager
             DdJob.Items.Clear();
             DdJob.Items.Add(new ComboBoxItem { Content = "(all jobs)", Tag = -1, IsSelected = true });
 
-            // Show only the magic-capable jobs by default — these are the
-            // ones whose spell macros need management.
-            int[] order = { 3, 4, 5, 7, 8, 10, 13, 15, 16, 20, 21, 22 };
+            // All 22 jobs in standard FFXI order. The filter affects BOTH
+            // the Spells tab (via SpellsForJob) and the Job Abilities tab
+            // (via JobAbilityMap.Belongs as of v1.2), so the physical
+            // jobs (WAR/MNK/THF/BST/RNG/SAM/DRG/COR/PUP/DNC) belong here
+            // even though they don't cast spells.
+            int[] order = {
+                 1,  2,  3,  4,  5,  6,  7,  8,  9, 10,   // WAR..BRD
+                11, 12, 13, 14, 15, 16, 17, 18, 19, 20,   // RNG..SCH
+                21, 22                                     // GEO, RUN
+            };
             foreach (var jid in order)
             {
                 JobInfo j;

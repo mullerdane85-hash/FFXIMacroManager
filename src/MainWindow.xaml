@@ -264,7 +264,7 @@
                            Text="Ready."
                            Foreground="{StaticResource TextMuted}"/>
                 <TextBlock Grid.Column="1"
-                           Text="FFXI Macro Manager  ·  v1.2  ·  per-job JA filter"
+                           Text="FFXI Macro Manager  ·  v1.3  ·  all 22 jobs in filter"
                            Foreground="{StaticResource TextDim}"/>
             </Grid>
         </Border>
