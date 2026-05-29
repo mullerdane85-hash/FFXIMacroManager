@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="FFXI Macro Manager"
     Width="1280" Height="780"
-    MinWidth="1100" MinHeight="660"
+    MinWidth="1280" MinHeight="720"
     WindowStartupLocation="CenterScreen">
 
     <Grid Margin="10">
@@ -184,33 +184,70 @@
                           HorizontalAlignment="Center" VerticalAlignment="Stretch"
                           Margin="2,0"/>
 
-            <!-- SPELL/JA LIST PANE -->
+            <!-- SPELL/JA LIST PANE
+                 Row-based grid (not DockPanel) so each control occupies
+                 exactly one row at the size we want, the ListBox fills
+                 remaining vertical space, and resizing the window can't
+                 cause any row to overflow horizontally. Every control
+                 with content uses HorizontalAlignment=Stretch + a single
+                 Column="*" so width = whatever the pane has minus padding. -->
             <Border Grid.Column="4" Style="{StaticResource SectionBorder}" Padding="8">
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top"
-                               Text="Action library"
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>   <!-- title -->
+                        <RowDefinition Height="Auto"/>   <!-- kind + search -->
+                        <RowDefinition Height="Auto"/>   <!-- weapon filter (WS only) -->
+                        <RowDefinition Height="Auto"/>   <!-- target picker -->
+                        <RowDefinition Height="Auto"/>   <!-- hint -->
+                        <RowDefinition Height="*"/>      <!-- list -->
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Action library"
                                FontSize="14" FontWeight="Bold"
                                Foreground="{StaticResource Accent}"
                                Margin="2,2,2,8"/>
 
-                    <Grid DockPanel.Dock="Top" Margin="2,0,2,6">
+                    <!-- Row: library kind dropdown + search text. The
+                         dropdown gets Auto width (sizes to its widest
+                         item, ~120px for "Weapon skills"); search fills
+                         the rest. -->
+                    <Grid Grid.Row="1" Margin="2,0,2,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <ComboBox Grid.Column="0" x:Name="DdLibKind" Width="140" Margin="0,0,6,0">
+                        <ComboBox Grid.Column="0" x:Name="DdLibKind" Margin="0,0,6,0" MinWidth="120">
                             <ComboBoxItem Content="Spells"        IsSelected="True"/>
                             <ComboBoxItem Content="Job abilities"/>
                             <ComboBoxItem Content="Weapon skills"/>
                             <ComboBoxItem Content="Targets"/>
                         </ComboBox>
-                        <TextBox Grid.Column="1" x:Name="TxtSearch"/>
+                        <TextBox Grid.Column="1" x:Name="TxtSearch"
+                                 HorizontalAlignment="Stretch"/>
                     </Grid>
 
-                    <!-- Target picker: when you double-click a spell/JA/WS in
-                         the list below, this is the target token that gets
-                         appended.  Default <t> works for most macros. -->
-                    <Grid DockPanel.Dock="Top" Margin="2,0,2,6">
+                    <!-- Row: weapon-type filter. Only visible when the
+                         user has the Weapon Skills tab selected (set in
+                         code-behind by DdLibKind_SelectionChanged). The
+                         row height collapses to zero when hidden via
+                         Visibility=Collapsed on the inner Grid. -->
+                    <Grid Grid.Row="2" x:Name="WeaponFilterRow"
+                          Margin="2,0,2,6" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Weapon: "
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource Accent}"
+                                   FontWeight="Bold"
+                                   Margin="0,0,6,0"/>
+                        <ComboBox Grid.Column="1" x:Name="DdWeapon"
+                                  HorizontalAlignment="Stretch"/>
+                    </Grid>
+
+                    <!-- Row: target picker (token appended on double-click) -->
+                    <Grid Grid.Row="3" Margin="2,0,2,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
@@ -220,34 +257,35 @@
                                    Foreground="{StaticResource Accent}"
                                    FontWeight="Bold"
                                    Margin="0,0,6,0"/>
-                        <ComboBox Grid.Column="1" x:Name="DdTarget">
-                            <ComboBoxItem Content="&lt;t&gt; — current target"   Tag="&lt;t&gt;" IsSelected="True"/>
-                            <ComboBoxItem Content="&lt;me&gt; — self"            Tag="&lt;me&gt;"/>
+                        <ComboBox Grid.Column="1" x:Name="DdTarget"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="&lt;t&gt; — current target"      Tag="&lt;t&gt;" IsSelected="True"/>
+                            <ComboBoxItem Content="&lt;me&gt; — self"               Tag="&lt;me&gt;"/>
                             <ComboBoxItem Content="&lt;stnpc&gt; — sub-target NPC"  Tag="&lt;stnpc&gt;"/>
                             <ComboBoxItem Content="&lt;stpc&gt; — sub-target PC"    Tag="&lt;stpc&gt;"/>
                             <ComboBoxItem Content="&lt;stal&gt; — sub-target ally"  Tag="&lt;stal&gt;"/>
                             <ComboBoxItem Content="&lt;bt&gt; — battle target"      Tag="&lt;bt&gt;"/>
                             <ComboBoxItem Content="&lt;lastst&gt; — last sub-target" Tag="&lt;lastst&gt;"/>
-                            <ComboBoxItem Content="&lt;p0&gt; — party slot 0 (you)"  Tag="&lt;p0&gt;"/>
-                            <ComboBoxItem Content="&lt;p1&gt; — party slot 1"        Tag="&lt;p1&gt;"/>
-                            <ComboBoxItem Content="&lt;p2&gt; — party slot 2"        Tag="&lt;p2&gt;"/>
-                            <ComboBoxItem Content="&lt;p3&gt; — party slot 3"        Tag="&lt;p3&gt;"/>
-                            <ComboBoxItem Content="&lt;p4&gt; — party slot 4"        Tag="&lt;p4&gt;"/>
-                            <ComboBoxItem Content="&lt;p5&gt; — party slot 5"        Tag="&lt;p5&gt;"/>
-                            <ComboBoxItem Content="(no target — append nothing)"     Tag=""/>
+                            <ComboBoxItem Content="&lt;p0&gt; — party slot 0 (you)" Tag="&lt;p0&gt;"/>
+                            <ComboBoxItem Content="&lt;p1&gt; — party slot 1"       Tag="&lt;p1&gt;"/>
+                            <ComboBoxItem Content="&lt;p2&gt; — party slot 2"       Tag="&lt;p2&gt;"/>
+                            <ComboBoxItem Content="&lt;p3&gt; — party slot 3"       Tag="&lt;p3&gt;"/>
+                            <ComboBoxItem Content="&lt;p4&gt; — party slot 4"       Tag="&lt;p4&gt;"/>
+                            <ComboBoxItem Content="&lt;p5&gt; — party slot 5"       Tag="&lt;p5&gt;"/>
+                            <ComboBoxItem Content="(no target — append nothing)"    Tag=""/>
                         </ComboBox>
                     </Grid>
 
-                    <TextBlock DockPanel.Dock="Top"
+                    <TextBlock Grid.Row="4"
                                x:Name="LblLibHint"
                                Text="Double-click any entry to insert into the current line."
                                Foreground="{StaticResource TextMuted}"
                                TextWrapping="Wrap"
                                Margin="2,0,2,6"/>
 
-                    <ListBox x:Name="LbLibrary"
+                    <ListBox Grid.Row="5" x:Name="LbLibrary"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
-                </DockPanel>
+                </Grid>
             </Border>
         </Grid>
 
@@ -264,7 +302,7 @@
                            Text="Ready."
                            Foreground="{StaticResource TextMuted}"/>
                 <TextBlock Grid.Column="1"
-                           Text="FFXI Macro Manager  ·  v1.3  ·  all 22 jobs in filter"
+                           Text="FFXI Macro Manager  ·  v1.4  ·  weapon filter + layout fix"
                            Foreground="{StaticResource TextDim}"/>
             </Grid>
         </Border>

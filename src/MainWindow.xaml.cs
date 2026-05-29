@@ -83,6 +83,12 @@ namespace FFXIMacroManager
             DdJob.SelectionChanged       += DdJob_SelectionChanged;
             DdBook.SelectionChanged      += DdBookOrPage_SelectionChanged;
             DdPage.SelectionChanged      += DdBookOrPage_SelectionChanged;
+            // Weapon filter — populated in PopulateWeaponDropdown after data load.
+            DdWeapon.SelectionChanged    += (_, __) => RefreshLibrary();
+            // Library-kind change toggles the weapon-row visibility AND
+            // refreshes the listing. Order matters: visibility first so
+            // any layout knock-on settles before the listbox repaints.
+            DdLibKind.SelectionChanged   += DdLibKind_SelectionChanged;
 
             // Arrow-key cycling on every selector. Clicking a ComboBox once
             // is enough to focus it; from there Up / Down cycle through the
@@ -94,7 +100,7 @@ namespace FFXIMacroManager
             WireArrowKeyCycling(DdJob);
             WireArrowKeyCycling(DdLibKind);   // bonus: cycle Spells/JA/WS/Targets
             WireArrowKeyCycling(DdTarget);    // bonus: cycle target tokens
-            DdLibKind.SelectionChanged   += (_, __) => RefreshLibrary();
+            WireArrowKeyCycling(DdWeapon);    // weapon filter on the WS tab
             TxtSearch.TextChanged        += (_, __) => RefreshLibrary();
             LbLibrary.MouseDoubleClick   += LbLibrary_MouseDoubleClick;
 
@@ -182,6 +188,7 @@ namespace FFXIMacroManager
             }
 
             PopulateJobDropdown();
+            PopulateWeaponDropdown();
 
             // Try the last-used install folder
             string saved = LoadSavedInstallPath();
@@ -298,6 +305,67 @@ namespace FFXIMacroManager
             }
             DdPage.SelectedIndex = Math.Max(0, Math.Min(9, prev - 1));
             DdPage.SelectionChanged += DdBookOrPage_SelectionChanged;
+        }
+
+        // Standard FFXI weapon-skill IDs -> human label. Source: Windower
+        // res/skills.lua and BG-Wiki. Skill 0 means "uncategorized / pet
+        // WS" (Aegis Schism etc.) and is grouped under "Other / pet WS".
+        // Values that don't appear in weapon_skills.json are still
+        // listed so the dropdown matches the broader skill table, but
+        // they'll just show 0 entries when picked.
+        private static readonly (int Id, string Label)[] WeaponSkillTypes = new (int, string)[]
+        {
+            (-1, "(all weapons)"),
+            ( 1, "Hand-to-Hand"),
+            ( 2, "Dagger"),
+            ( 3, "Sword"),
+            ( 4, "Great Sword"),
+            ( 5, "Axe"),
+            ( 6, "Great Axe"),
+            ( 7, "Scythe"),
+            ( 8, "Polearm"),
+            ( 9, "Katana"),
+            (10, "Great Katana"),
+            (11, "Club"),
+            (12, "Staff"),
+            (25, "Archery (Bow)"),
+            (26, "Marksmanship (Gun / Crossbow)"),
+            ( 0, "Other / pet WS"),
+        };
+
+        private void PopulateWeaponDropdown()
+        {
+            DdWeapon.Items.Clear();
+            foreach (var t in WeaponSkillTypes)
+            {
+                DdWeapon.Items.Add(new ComboBoxItem {
+                    Content    = t.Label,
+                    Tag        = t.Id,
+                    IsSelected = (t.Id == -1),  // default to "(all weapons)"
+                });
+            }
+        }
+
+        // Returns the skill ID currently selected in the weapon filter
+        // (-1 means "all weapons", 0 means "uncategorized", positive ints
+        // match the `skill` field on each WeaponSkill in weapon_skills.json).
+        private int SelectedWeaponSkill
+        {
+            get {
+                var it = DdWeapon == null ? null : DdWeapon.SelectedItem as ComboBoxItem;
+                return it == null ? -1 : (int)it.Tag;
+            }
+        }
+
+        // Show/hide the Weapon: row depending on whether the user is
+        // looking at the Weapon Skills tab. When hidden, the row's grid
+        // collapses to 0 px so the listbox below claims that space.
+        private void DdLibKind_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            bool isWs = (DdLibKind.SelectedIndex == 2);
+            if (WeaponFilterRow != null)
+                WeaponFilterRow.Visibility = isWs ? Visibility.Visible : Visibility.Collapsed;
+            RefreshLibrary();
         }
 
         private void PopulateJobDropdown()
@@ -1029,11 +1097,15 @@ namespace FFXIMacroManager
             }
             else if (kind == 2) // weapon skills
             {
-                LblLibHint.Text = "Double-click a weapon skill to insert it with the selected target.";
+                int weaponId = SelectedWeaponSkill;
+                LblLibHint.Text = weaponId > 0
+                    ? "Double-click a weapon skill to insert it with the selected target. (Filtered by weapon.)"
+                    : "Double-click a weapon skill to insert it with the selected target.";
                 var list = SpellDb.WeaponSkillsFor(jobId);
                 foreach (var w in list)
                 {
                     if (filter.Length > 0 && w.En.ToLowerInvariant().IndexOf(filter) < 0) continue;
+                    if (weaponId >= 0 && w.Skill != weaponId) continue;
                     LbLibrary.Items.Add(new ListBoxItem {
                         Content = w.En,
                         Tag = new InsertSpec { Prefix = "/ws", Name = w.En },
