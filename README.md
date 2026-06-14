@@ -10,7 +10,25 @@ This software is provided **AS IS, without warranty of any kind**, express or im
 **By installing, building, or running this software you acknowledge that you understand and accept these risks.**
 
 <!-- END DISCLAIMER -->
-### Before you use this — back up your macros
+
+# 🛑 READ THIS FIRST — Logout before editing
+
+**FFXI keeps your macros in memory while you're logged in.** If you edit `mcr*.dat` with this tool while the game is running, FFXI will overwrite your changes the next time it writes back to disk (page navigation, zone change, or logout). Confirmed in-testing: edits made while logged in do not show up in-game.
+
+**Workflow that actually works:**
+
+1. **In-game: `Macro List → Save All to Server`** — uploads your current macros to your character on the Square Enix server. Bulletproof recovery option if anything goes wrong locally. (SE limits this to ~one save per 30 minutes per character — do it now, not after you've been editing for an hour.)
+2. **`/logout` to character select.** This is when FFXI flushes its in-memory macro state to disk. After this point, disk = in-game.
+3. **Open the manager and edit.** Your changes go to disk without racing FFXI.
+4. **Log back into your character.** FFXI reads the new disk state into memory. Your edits are now live in-game.
+
+If you skip step 2 and edit while logged in, your changes get clobbered the next time FFXI writes to disk — most users notice it as "the manager looks correct but in-game still shows the old macros," and then the manager edits disappear when FFXI saves.
+
+The in-game **Save All to Server** is your safety net for the worst case (you lost local edits, you save-corrupted a file, etc.). Always do it before any editing session.
+
+---
+
+### Before you use this — local backup
 
 This tool edits your FFXI `mcr*.dat` macro files directly. Two backups are recommended before you save anything you care about:
 
