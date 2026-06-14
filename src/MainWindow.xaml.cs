@@ -284,42 +284,56 @@ namespace FFXIMacroManager
             DdBook.SelectedIndex = wantBook - 1;
 
             DdPage.Items.Clear();
-            // Live (mcr.dat) entry. FFXI uses the unnumbered mcr.dat as its
-            // "currently active page" snapshot -- this is the file that
-            // actually mirrors what you see in-game. The numbered files
-            // (mcrN.dat) are the saved-page slots FFXI restores from when
-            // you navigate. We expose Live as Tag=0 (real pages are 1-10)
-            // and ReloadActivePage treats 0 as "load mcr.dat instead".
-            // Without this, the manager only saw the numbered slots and
-            // missed every in-game macro that hadn't been explicitly
-            // copied to a numbered slot.
-            {
-                string liveLabel = "Live  (mcr.dat — currently active in-game)";
-                if (ch != null)
-                {
-                    string liveFile = System.IO.Path.Combine(ch.FolderPath, "mcr.dat");
-                    if (!System.IO.File.Exists(liveFile))
-                        liveLabel = "Live  (mcr.dat — not present)";
-                }
-                DdPage.Items.Add(new ComboBoxItem { Content = liveLabel, Tag = 0 });
-            }
+            // CORRECT FFXI file mapping (user-verified 2026-06-14):
+            //   file_index = (book - 1) * 10 + (page - 1)
+            //
+            // The previous formula (book-1)*10 + page was off by one --
+            // FFXI uses 0-based file indexing internally. Book 1 Page 1
+            // has file_index 0 which corresponds to mcr0.dat -- but
+            // mcr0.dat doesn't exist on disk because FFXI uses the
+            // un-numbered mcr.dat for that slot (it's the "currently
+            // active in-game page" snapshot). All other (book, page)
+            // combinations use mcr<file_index>.dat directly.
+            //
+            // Concretely with this formula:
+            //   Book 1 Page 1  -> mcr.dat (live)
+            //   Book 1 Page 2  -> mcr1.dat
+            //   Book 1 Page 10 -> mcr9.dat
+            //   Book 2 Page 1  -> mcr10.dat
+            //   Book 2 Page 10 -> mcr19.dat
+            //   Book 3 Page 1  -> mcr20.dat
+            //
+            // We no longer need a separate "Live" dropdown entry: it was a
+            // workaround for the broken Book 1 Page 1 mapping. Now Page 1
+            // of Book 1 already IS the live mcr.dat, just labeled with its
+            // proper in-game name.
             for (int p = 1; p <= 10; p++)
             {
-                int n = (wantBook - 1) * 10 + p;
+                int n = (wantBook - 1) * 10 + (p - 1);
                 string label = "Page " + p;
                 if (ch != null)
                 {
-                    string file = System.IO.Path.Combine(ch.FolderPath, "mcr" + n + ".dat");
-                    if (System.IO.File.Exists(file))
-                        label += "    (mcr" + n + ".dat)";
+                    if (n == 0)
+                    {
+                        // Book 1 Page 1: lives in mcr.dat, the live snapshot.
+                        string liveFile = System.IO.Path.Combine(ch.FolderPath, "mcr.dat");
+                        label += System.IO.File.Exists(liveFile)
+                            ? "    (mcr.dat — currently active in-game)"
+                            : "    (mcr.dat — not present)";
+                    }
                     else
-                        label += "    (empty)";
+                    {
+                        string file = System.IO.Path.Combine(ch.FolderPath, "mcr" + n + ".dat");
+                        if (System.IO.File.Exists(file))
+                            label += "    (mcr" + n + ".dat)";
+                        else
+                            label += "    (empty)";
+                    }
                 }
                 DdPage.Items.Add(new ComboBoxItem { Content = label, Tag = p });
             }
-            // SelectedIndex 0 = Live, 1..10 = Pages 1..10
             int wantPage = Math.Max(1, Math.Min(10, prevPage));
-            DdPage.SelectedIndex = wantPage;   // shifted by 1 due to Live entry
+            DdPage.SelectedIndex = wantPage - 1;
 
             DdBook.SelectionChanged += DdBookOrPage_SelectionChanged;
             DdPage.SelectionChanged += DdBookOrPage_SelectionChanged;
@@ -335,26 +349,29 @@ namespace FFXIMacroManager
 
             DdPage.SelectionChanged -= DdBookOrPage_SelectionChanged;
             DdPage.Items.Clear();
-            // Same Live entry as RefillBookAndPage -- the Live snapshot is
-            // character-wide (one mcr.dat per character) so it shows on
-            // every book's page list. Tag=0 routes to mcr.dat on load.
-            string liveFile = System.IO.Path.Combine(_activeChar.FolderPath, "mcr.dat");
-            string liveLabel = System.IO.File.Exists(liveFile)
-                ? "Live  (mcr.dat — currently active in-game)"
-                : "Live  (mcr.dat — not present)";
-            DdPage.Items.Add(new ComboBoxItem { Content = liveLabel, Tag = 0 });
+            // Same formula as RefillBookAndPage: file_index = (book-1)*10 + (page-1)
+            // with file_index 0 (Book 1 Page 1) routed to mcr.dat (live).
             for (int p = 1; p <= 10; p++)
             {
-                int n = (book - 1) * 10 + p;
-                string file = System.IO.Path.Combine(_activeChar.FolderPath, "mcr" + n + ".dat");
-                string label = "Page " + p + (System.IO.File.Exists(file)
-                                ? "    (mcr" + n + ".dat)"
-                                : "    (empty)");
+                int n = (book - 1) * 10 + (p - 1);
+                string label = "Page " + p;
+                if (n == 0)
+                {
+                    string liveFile = System.IO.Path.Combine(_activeChar.FolderPath, "mcr.dat");
+                    label += System.IO.File.Exists(liveFile)
+                        ? "    (mcr.dat — currently active in-game)"
+                        : "    (mcr.dat — not present)";
+                }
+                else
+                {
+                    string file = System.IO.Path.Combine(_activeChar.FolderPath, "mcr" + n + ".dat");
+                    label += System.IO.File.Exists(file)
+                        ? "    (mcr" + n + ".dat)"
+                        : "    (empty)";
+                }
                 DdPage.Items.Add(new ComboBoxItem { Content = label, Tag = p });
             }
-            // Items[0]=Live, Items[1..10]=Pages 1..10; preserve prev page,
-            // mapping prev=1..10 -> SelectedIndex 1..10. prev=0 (Live) keeps Live.
-            DdPage.SelectedIndex = Math.Max(0, Math.Min(10, prev));
+            DdPage.SelectedIndex = Math.Max(0, Math.Min(9, prev - 1));
             DdPage.SelectionChanged += DdBookOrPage_SelectionChanged;
         }
 
@@ -874,29 +891,29 @@ namespace FFXIMacroManager
                 return;
             }
 
-            // SelectedPage == 0 is the "Live" sentinel -- load mcr.dat
-            // (FFXI's currently active in-game page). Otherwise use the
-            // normal (book-1)*10+page mapping for the numbered slot file.
+            // FFXI's actual file mapping (user-verified 2026-06-14):
+            //   file_index = (book - 1) * 10 + (page - 1)
+            // file_index 0 (Book 1 Page 1) lives in mcr.dat because mcr0.dat
+            // doesn't exist on disk. All other indices use mcr<index>.dat.
+            int n = (SelectedBook - 1) * 10 + (SelectedPage - 1);
             string file;
-            int n;
-            if (SelectedPage == 0)
+            if (n == 0)
             {
-                n = 0;
                 file = Path.Combine(_activeChar.FolderPath, "mcr.dat");
             }
             else
             {
-                n = (SelectedBook - 1) * 10 + SelectedPage;
                 file = Path.Combine(_activeChar.FolderPath, "mcr" + n + ".dat");
             }
             _activePageRef = new MacroPageRef {
                 Book = SelectedBook, Page = SelectedPage, FileNumber = n,
                 Path = file, Exists = File.Exists(file)
             };
-            LblPageTitle.Text = SelectedPage == 0
-                ? string.Format("Live page ({0}) — currently active in-game", Path.GetFileName(file))
+            LblPageTitle.Text = n == 0
+                ? string.Format("Book {0} / Page {1}  ({2} — currently active in-game)",
+                                SelectedBook, SelectedPage, Path.GetFileName(file))
                 : string.Format("Book {0} / Page {1}  ({2})",
-                                  SelectedBook, SelectedPage, Path.GetFileName(file));
+                                SelectedBook, SelectedPage, Path.GetFileName(file));
 
             if (!_activePageRef.Exists)
             {
@@ -934,9 +951,10 @@ namespace FFXIMacroManager
                 LblStatus.Text = "No character selected.";
                 return;
             }
-            if (SelectedPage == 0)
+            int n = (SelectedBook - 1) * 10 + (SelectedPage - 1);
+            if (n == 0)
             {
-                LblStatus.Text = "Snapshot Live is a no-op when the Live view is selected. Pick a numbered Page first.";
+                LblStatus.Text = "Snapshot Live is a no-op for Book 1 Page 1 -- that slot IS mcr.dat. Pick a different page.";
                 return;
             }
             string liveFile = Path.Combine(_activeChar.FolderPath, "mcr.dat");
@@ -945,7 +963,6 @@ namespace FFXIMacroManager
                 LblStatus.Text = "mcr.dat not found -- FFXI hasn't written a live snapshot yet. /logout in-game first.";
                 return;
             }
-            int n = (SelectedBook - 1) * 10 + SelectedPage;
             string destFile = Path.Combine(_activeChar.FolderPath, "mcr" + n + ".dat");
 
             // Backup existing destination first so a misclick is recoverable.
