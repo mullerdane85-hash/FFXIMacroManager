@@ -109,17 +109,16 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0"
-                                   Text="Click a slot to edit. CTRL row + ALT row = full FFXI page."
+                                   Text="Click a slot to edit."
                                    Foreground="{StaticResource TextMuted}"
-                                   VerticalAlignment="Center"/>
-                        <!-- Snapshot Live: copies mcr.dat (currently active in-game page) into
-                             the currently-selected numbered slot file. Lets the user park their
-                             active in-game macros into a saved Book/Page slot so the manager
-                             can find them in the numbered files. No-op when the Live page itself
-                             is the active view. -->
+                                   VerticalAlignment="Center"
+                                   ToolTip="CTRL row + ALT row = full FFXI page."/>
+                        <!-- Shortened "Snapshot Live" label (was "Snapshot Live to Page") so
+                             the action row fits the panel width and Save page stays visible.
+                             Tooltip carries the full explanation. -->
 
                         <Button Grid.Column="2" x:Name="BtnSnapshotLive"
-                                Content="Snapshot Live → Page" Padding="10,3" Margin="0,0,6,0"
+                                Content="Snapshot Live" Padding="10,3" Margin="0,0,6,0"
                                 ToolTip="Copy the live mcr.dat (your current in-game page) into the selected numbered Book/Page slot."/>
                         <Button Grid.Column="3" x:Name="BtnReload" Content="Reload" Padding="10,3" Margin="0,0,6,0"/>
                         <Button Grid.Column="4" x:Name="BtnSavePage" Content="Save page"
