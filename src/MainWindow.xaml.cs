@@ -14,6 +14,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -75,8 +76,9 @@ namespace FFXIMacroManager
             BtnPickFolder.Click  += BtnPickFolder_Click;
             BtnRenameChar.Click  += BtnRenameChar_Click;
             BtnBackup.Click      += BtnBackup_Click;
-            BtnReload.Click      += (_, __) => ReloadActivePage();
+            BtnReload.Click      += (_, __) => { FlushPendingEditsToDisk(); ReloadActivePage(); };
             BtnSavePage.Click    += BtnSavePage_Click;
+            BtnSnapshotLive.Click += BtnSnapshotLive_Click;
             BtnRevert.Click      += BtnRevert_Click;
             BtnClear.Click       += BtnClear_Click;
 
@@ -205,6 +207,10 @@ namespace FFXIMacroManager
             PopulateJobDropdown();
             PopulateWeaponDropdown();
 
+            // Last resort: flush on window close so an unsaved-edits +
+            // close-the-app combo doesn't silently lose what the user typed.
+            this.Closing += (_, __) => FlushPendingEditsToDisk();
+
             // Try the last-used install folder
             string saved = LoadSavedInstallPath();
             if (!string.IsNullOrEmpty(saved) && Directory.Exists(saved))
@@ -278,6 +284,25 @@ namespace FFXIMacroManager
             DdBook.SelectedIndex = wantBook - 1;
 
             DdPage.Items.Clear();
+            // Live (mcr.dat) entry. FFXI uses the unnumbered mcr.dat as its
+            // "currently active page" snapshot -- this is the file that
+            // actually mirrors what you see in-game. The numbered files
+            // (mcrN.dat) are the saved-page slots FFXI restores from when
+            // you navigate. We expose Live as Tag=0 (real pages are 1-10)
+            // and ReloadActivePage treats 0 as "load mcr.dat instead".
+            // Without this, the manager only saw the numbered slots and
+            // missed every in-game macro that hadn't been explicitly
+            // copied to a numbered slot.
+            {
+                string liveLabel = "Live  (mcr.dat — currently active in-game)";
+                if (ch != null)
+                {
+                    string liveFile = System.IO.Path.Combine(ch.FolderPath, "mcr.dat");
+                    if (!System.IO.File.Exists(liveFile))
+                        liveLabel = "Live  (mcr.dat — not present)";
+                }
+                DdPage.Items.Add(new ComboBoxItem { Content = liveLabel, Tag = 0 });
+            }
             for (int p = 1; p <= 10; p++)
             {
                 int n = (wantBook - 1) * 10 + p;
@@ -292,8 +317,9 @@ namespace FFXIMacroManager
                 }
                 DdPage.Items.Add(new ComboBoxItem { Content = label, Tag = p });
             }
+            // SelectedIndex 0 = Live, 1..10 = Pages 1..10
             int wantPage = Math.Max(1, Math.Min(10, prevPage));
-            DdPage.SelectedIndex = wantPage - 1;
+            DdPage.SelectedIndex = wantPage;   // shifted by 1 due to Live entry
 
             DdBook.SelectionChanged += DdBookOrPage_SelectionChanged;
             DdPage.SelectionChanged += DdBookOrPage_SelectionChanged;
@@ -309,6 +335,14 @@ namespace FFXIMacroManager
 
             DdPage.SelectionChanged -= DdBookOrPage_SelectionChanged;
             DdPage.Items.Clear();
+            // Same Live entry as RefillBookAndPage -- the Live snapshot is
+            // character-wide (one mcr.dat per character) so it shows on
+            // every book's page list. Tag=0 routes to mcr.dat on load.
+            string liveFile = System.IO.Path.Combine(_activeChar.FolderPath, "mcr.dat");
+            string liveLabel = System.IO.File.Exists(liveFile)
+                ? "Live  (mcr.dat — currently active in-game)"
+                : "Live  (mcr.dat — not present)";
+            DdPage.Items.Add(new ComboBoxItem { Content = liveLabel, Tag = 0 });
             for (int p = 1; p <= 10; p++)
             {
                 int n = (book - 1) * 10 + p;
@@ -318,7 +352,9 @@ namespace FFXIMacroManager
                                 : "    (empty)");
                 DdPage.Items.Add(new ComboBoxItem { Content = label, Tag = p });
             }
-            DdPage.SelectedIndex = Math.Max(0, Math.Min(9, prev - 1));
+            // Items[0]=Live, Items[1..10]=Pages 1..10; preserve prev page,
+            // mapping prev=1..10 -> SelectedIndex 1..10. prev=0 (Live) keeps Live.
+            DdPage.SelectedIndex = Math.Max(0, Math.Min(10, prev));
             DdPage.SelectionChanged += DdBookOrPage_SelectionChanged;
         }
 
@@ -686,6 +722,10 @@ namespace FFXIMacroManager
         // ------------------------------------------------------------------
         private void DdCharacter_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            // SAFETY: flush any pending edits on the OUTGOING character
+            // before switching. See FlushPendingEditsToDisk's comment.
+            FlushPendingEditsToDisk();
+
             var item = DdCharacter.SelectedItem as ComboBoxItem;
             _activeChar = item == null ? null : item.Tag as Character;
 
@@ -749,10 +789,51 @@ namespace FFXIMacroManager
 
         private void DdBookOrPage_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            // SAFETY: commit + flush any unsaved edits on the OUTGOING page
+            // before we tear the editor down. Without this, typing into a
+            // slot and then clicking the book/page dropdown silently wipes
+            // every typed line -- when the user comes back and hits Save
+            // Page, the empty editor state gets written to disk (looks like
+            // "my macros aren't saving" from the user's perspective).
+            FlushPendingEditsToDisk();
+
             // If the book changed, refresh the page labels so the "(empty)"
             // hints reflect the new book's pages.
             if (sender == DdBook) RefreshPageLabels();
             ReloadActivePage();
+        }
+
+        // Commits the editor's textboxes into the model and, if anything
+        // is actually dirty, writes the file to disk. No-op when there's no
+        // active file or no edits. Used by every code path that's about to
+        // throw away the current editor state (page nav, character switch,
+        // reload, window close, etc.) so user edits can never silently die.
+        private void FlushPendingEditsToDisk()
+        {
+            if (_activeFile == null || _activeMacroIndex < 0) return;
+            CommitEditorToModel();
+            // Only write if SOMETHING is dirty -- saving a fully-clean file
+            // is harmless (byte-perfect round-trip) but wastes a disk write
+            // and bumps mtime, which makes debugging "which page did I last
+            // touch?" harder.
+            bool anyDirty = false;
+            foreach (var m in _activeFile.Macros)
+                foreach (var ln in m.Lines) if (ln.Dirty) { anyDirty = true; break; }
+            if (!anyDirty) return;
+            try
+            {
+                _activeFile.Save();
+                LblStatus.Text = "Auto-saved " + _activeFile.SourcePath
+                               + "  (page change flushed pending edits)";
+                MarkAllClean();
+            }
+            catch (Exception ex)
+            {
+                // Surface the failure but DON'T pop a modal -- the user
+                // is mid-navigation and a blocking dialog mid-click breaks
+                // the flow worse than the silent-loss bug we're fixing.
+                LblStatus.Text = "Auto-save failed on page change: " + ex.Message;
+            }
         }
 
         private int SelectedBook
@@ -793,13 +874,28 @@ namespace FFXIMacroManager
                 return;
             }
 
-            int n = (SelectedBook - 1) * 10 + SelectedPage;
-            string file = Path.Combine(_activeChar.FolderPath, "mcr" + n + ".dat");
+            // SelectedPage == 0 is the "Live" sentinel -- load mcr.dat
+            // (FFXI's currently active in-game page). Otherwise use the
+            // normal (book-1)*10+page mapping for the numbered slot file.
+            string file;
+            int n;
+            if (SelectedPage == 0)
+            {
+                n = 0;
+                file = Path.Combine(_activeChar.FolderPath, "mcr.dat");
+            }
+            else
+            {
+                n = (SelectedBook - 1) * 10 + SelectedPage;
+                file = Path.Combine(_activeChar.FolderPath, "mcr" + n + ".dat");
+            }
             _activePageRef = new MacroPageRef {
                 Book = SelectedBook, Page = SelectedPage, FileNumber = n,
                 Path = file, Exists = File.Exists(file)
             };
-            LblPageTitle.Text = string.Format("Book {0} / Page {1}  ({2})",
+            LblPageTitle.Text = SelectedPage == 0
+                ? string.Format("Live page ({0}) — currently active in-game", Path.GetFileName(file))
+                : string.Format("Book {0} / Page {1}  ({2})",
                                   SelectedBook, SelectedPage, Path.GetFileName(file));
 
             if (!_activePageRef.Exists)
@@ -821,6 +917,58 @@ namespace FFXIMacroManager
             }
 
             RenderAllSlots();
+        }
+
+        // Copy mcr.dat (FFXI's live "currently active in-game page") into the
+        // currently-selected numbered Book/Page slot. Use case: user has
+        // their real in-game macros in mcr.dat but the numbered slot
+        // (mcrN.dat) is stale or empty -- one click parks the live state
+        // into a slot the manager can navigate to. Refuses to overwrite if
+        // the user has the Live page itself selected (it'd be a no-op
+        // anyway -- you'd be copying mcr.dat onto mcr.dat). Always writes a
+        // .bak backup of the destination before overwriting.
+        private void BtnSnapshotLive_Click(object sender, RoutedEventArgs e)
+        {
+            if (_activeChar == null)
+            {
+                LblStatus.Text = "No character selected.";
+                return;
+            }
+            if (SelectedPage == 0)
+            {
+                LblStatus.Text = "Snapshot Live is a no-op when the Live view is selected. Pick a numbered Page first.";
+                return;
+            }
+            string liveFile = Path.Combine(_activeChar.FolderPath, "mcr.dat");
+            if (!File.Exists(liveFile))
+            {
+                LblStatus.Text = "mcr.dat not found -- FFXI hasn't written a live snapshot yet. /logout in-game first.";
+                return;
+            }
+            int n = (SelectedBook - 1) * 10 + SelectedPage;
+            string destFile = Path.Combine(_activeChar.FolderPath, "mcr" + n + ".dat");
+
+            // Backup existing destination first so a misclick is recoverable.
+            try
+            {
+                if (File.Exists(destFile))
+                {
+                    string bak = destFile + ".snapshot-bak";
+                    File.Copy(destFile, bak, overwrite: true);
+                }
+                File.Copy(liveFile, destFile, overwrite: true);
+                LblStatus.Text = "Snapshot Live -> " + Path.GetFileName(destFile)
+                    + " complete. (Previous content backed up to " + Path.GetFileName(destFile) + ".snapshot-bak.)";
+                // Reload the now-fresh page so the editor reflects what we copied.
+                ReloadActivePage();
+                // Page labels need to refresh too -- destination went from (empty)
+                // to populated, or its filename hint should re-render.
+                RefreshPageLabels();
+            }
+            catch (Exception ex)
+            {
+                LblStatus.Text = "Snapshot Live failed: " + ex.Message;
+            }
         }
 
         private void BtnSavePage_Click(object sender, RoutedEventArgs e)
@@ -1376,6 +1524,23 @@ namespace FFXIMacroManager
             if (spec != null)
             {
                 box.Text = ComposeCommand(spec.Prefix, spec.Name);
+                // Auto-fill the macro title with an abbreviated form of the
+                // ability name -- BUT only when the title is empty or still
+                // shows the previous auto-default. We never overwrite a user
+                // edit. AbbreviateForTitle ensures the result fits FFXI's
+                // 8-char macro title limit (e.g. "Absorb-STR" -> "AB. STR",
+                // "Trick Attack" -> "Trck Atk", "Flee" -> "Flee").
+                if (TxtTitle != null)
+                {
+                    bool emptyOrAuto = string.IsNullOrEmpty(TxtTitle.Text)
+                        || string.Equals(TxtTitle.Text, _lastAutoTitle, StringComparison.Ordinal);
+                    if (emptyOrAuto)
+                    {
+                        string abbr = AbbreviateForTitle(spec.Name);
+                        TxtTitle.Text   = abbr;
+                        _lastAutoTitle  = abbr;
+                    }
+                }
                 box.Focus();
                 box.CaretIndex = box.Text.Length;
                 return;
@@ -1393,6 +1558,94 @@ namespace FFXIMacroManager
 
             box.Focus();
             box.CaretIndex = box.Text.Length;
+        }
+
+        // Tracks the most recent value we auto-filled into TxtTitle from a
+        // library double-click. We compare on the next double-click so the
+        // user's manual edits to the title are NEVER overwritten -- only the
+        // previous auto-default gets replaced. Empty title is also treated
+        // as "user hasn't claimed it" and gets the new default.
+        private string _lastAutoTitle = null;
+
+        // Turn an ability / spell name into something that fits FFXI's 8-char
+        // macro title field while staying readable. Strategy:
+        //
+        //   1. If the name already fits (<= 8 chars), use it verbatim.
+        //   2. Multi-word names: keep the LAST word in full and abbreviate
+        //      every word before it to 2 chars + ".". So:
+        //        "Trick Attack" -> "Tr.Attack"  ... still too long ->
+        //                       -> "Tr. Atk" via second-word truncation if
+        //                          needed, capped at 8.
+        //        "Absorb STR"   -> "AB. STR"  (matches user's example)
+        //        "Sneak Attack" -> "Sn. Attack" -> "Sn. Atk"
+        //        "Magic Burst Bonus" -> "M.B. Bonus" -> "M.B.Bonu"
+        //   3. Single-word names longer than 8: drop interior vowels first
+        //      (after the first letter), e.g. "Benediction" -> "Bendctn".
+        //   4. Anything still over 8 gets a hard truncate.
+        //
+        // The period is the visual hint that "this word was shortened" --
+        // matches the user's "AB. STR" example.
+        private static string AbbreviateForTitle(string name)
+        {
+            const int MAX = 8;
+            if (string.IsNullOrEmpty(name)) return "";
+            name = name.Trim();
+            if (name.Length <= MAX) return name;
+
+            // Split on whitespace, hyphen, and apostrophe-as-word-boundary
+            // ("Cure's" stays one word; "Absorb-STR" splits in two).
+            var words = name.Split(new[] { ' ', '-' }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (words.Length == 1)
+            {
+                // Single word: drop interior vowels after the first character.
+                // "Benediction" -> "Bndctn" -> hard-truncate to 8 if still long.
+                string w = words[0];
+                var sb = new StringBuilder();
+                sb.Append(w[0]);
+                for (int i = 1; i < w.Length; i++)
+                {
+                    char c = w[i];
+                    if ("aeiouAEIOU".IndexOf(c) < 0) sb.Append(c);
+                }
+                string compressed = sb.ToString();
+                return compressed.Length <= MAX ? compressed : compressed.Substring(0, MAX);
+            }
+
+            // Multi-word: try increasingly aggressive shortening of all
+            // words EXCEPT the last, then truncate the last word if still
+            // too long.
+            string last = words[words.Length - 1];
+
+            // First attempt: 2 letters + period for every non-final word,
+            // last word in full.
+            string ShortPrefix(string w) =>
+                (w.Length <= 2 ? w : w.Substring(0, 2)) + ".";
+
+            var parts = new List<string>();
+            for (int i = 0; i < words.Length - 1; i++) parts.Add(ShortPrefix(words[i]));
+            parts.Add(last);
+            string joined = string.Join(" ", parts);
+            if (joined.Length <= MAX) return joined;
+
+            // Still too long: drop the space between the prefix and the
+            // last word ("Tr. Attack" -> "Tr.Attack").
+            joined = string.Concat(parts);
+            if (joined.Length <= MAX) return joined;
+
+            // Still too long: shrink the last word to fit. Reserve the
+            // total prefix length and use the remainder for the last word.
+            int prefixLen = 0;
+            for (int i = 0; i < parts.Count - 1; i++) prefixLen += parts[i].Length;
+            int budget = MAX - prefixLen;
+            if (budget < 1) budget = 1;
+            string lastShort = last.Length <= budget ? last : last.Substring(0, budget);
+            // Re-join with the shortened last word (no spaces).
+            var sb2 = new StringBuilder();
+            for (int i = 0; i < parts.Count - 1; i++) sb2.Append(parts[i]);
+            sb2.Append(lastShort);
+            string result = sb2.ToString();
+            return result.Length <= MAX ? result : result.Substring(0, MAX);
         }
 
         // ------------------------------------------------------------------
