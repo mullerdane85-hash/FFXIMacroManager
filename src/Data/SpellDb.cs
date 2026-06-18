@@ -316,11 +316,23 @@ namespace FFXIMacroManager.Data
         // DNC, etc.) and (b) a per-name map for the 236 generic JobAbility
         // entries and the 30 PetCommand entries. See Models/JobAbilityMap.cs
         // for the source-of-truth tables.
+        // Submenu-only "ability" names that appear in res/job_abilities.lua
+        // but aren't actually macro targets in-game -- in the FFXI command
+        // menu, clicking them just opens a sub-list of the real abilities.
+        // Macroing them does nothing useful, so we drop them from the
+        // library to stop them confusing the user (DNC user report).
+        private static readonly HashSet<string> _menuOnlyAbilities = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            "Sambas", "Waltzes", "Jigs", "Steps",
+            "Flourishes I", "Flourishes II", "Flourishes III",
+            "Stratagems",
+        };
+
         public static List<JobAbility> AbilitiesFor(int jobId)
         {
             var list = new List<JobAbility>();
             foreach (var a in Abilities.Values)
             {
+                if (_menuOnlyAbilities.Contains(a.En)) continue;
                 if (jobId <= 0)
                 {
                     // "all jobs" — still exclude mob abilities from a
