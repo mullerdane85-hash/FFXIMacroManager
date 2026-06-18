@@ -3,8 +3,8 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="FFXI Macro Manager"
-    Width="1280" Height="780"
-    MinWidth="1280" MinHeight="720"
+    Width="1600" Height="820"
+    MinWidth="1560" MinHeight="720"
     WindowStartupLocation="CenterScreen">
 
     <Grid Margin="10">
@@ -88,6 +88,8 @@
                 <ColumnDefinition Width="1.6*" MinWidth="380"/>   <!-- editor -->
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="1.3*" MinWidth="320"/>   <!-- spell list -->
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="1.2*" MinWidth="280"/>   <!-- info box -->
             </Grid.ColumnDefinitions>
 
             <!-- MACRO GRID PANE -->
@@ -107,21 +109,32 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0"
                                    Text="Click a slot to edit."
                                    Foreground="{StaticResource TextMuted}"
                                    VerticalAlignment="Center"
                                    ToolTip="CTRL row + ALT row = full FFXI page."/>
-                        <!-- Shortened "Snapshot Live" label (was "Snapshot Live to Page") so
-                             the action row fits the panel width and Save page stays visible.
-                             Tooltip carries the full explanation. -->
 
-                        <Button Grid.Column="2" x:Name="BtnSnapshotLive"
+                        <!-- Copy / Paste act on the currently-selected slot.
+                             Copy stashes the slot's title + 6 lines + raw
+                             byte block in memory; Paste writes them into the
+                             currently-selected slot. Cross-page paste works:
+                             open another page, click an empty slot, Paste. -->
+                        <Button Grid.Column="2" x:Name="BtnCopySlot"
+                                Content="Copy slot" Padding="10,3" Margin="0,0,6,0"
+                                ToolTip="Copy the currently-selected macro slot (title + 6 lines + auto-translate bytes) to the clipboard buffer.&#x0a;Paste into any slot afterwards, including a different Book/Page."/>
+                        <Button Grid.Column="3" x:Name="BtnPasteSlot"
+                                Content="Paste slot" Padding="10,3" Margin="0,0,12,0"
+                                ToolTip="Paste the previously-copied slot into the currently-selected slot. Switch Book/Page first if you want to paste to a different page."/>
+
+                        <Button Grid.Column="4" x:Name="BtnSnapshotLive"
                                 Content="Snapshot Live" Padding="10,3" Margin="0,0,6,0"
                                 ToolTip="Copy the live mcr.dat (your current in-game page) into the selected numbered Book/Page slot."/>
-                        <Button Grid.Column="3" x:Name="BtnReload" Content="Reload" Padding="10,3" Margin="0,0,6,0"/>
-                        <Button Grid.Column="4" x:Name="BtnSavePage" Content="Save page"
+                        <Button Grid.Column="5" x:Name="BtnReload" Content="Reload" Padding="10,3" Margin="0,0,6,0"/>
+                        <Button Grid.Column="6" x:Name="BtnSavePage" Content="Save page"
                                 Style="{StaticResource AccentButton}" Padding="14,3"/>
                     </Grid>
 
@@ -343,6 +356,42 @@
                     <ListBox Grid.Row="6" x:Name="LbLibrary"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
                 </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="5" Width="4" Background="{StaticResource Border1}"
+                          HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                          Margin="2,0"/>
+
+            <!-- INFO BOX PANE
+                 Populated from data/descriptions.json on action-library
+                 selection change. The description set ships ~1340 entries
+                 (spells from BG-Wiki's Category:Spells, JAs from the
+                 {{Job Ability}} template, WSs from the {{Standard WS}}
+                 template). Entries without a description record show a
+                 fallback hint. -->
+            <Border Grid.Column="6" Style="{StaticResource SectionBorder}" Padding="8">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" x:Name="LblInfoTitle"
+                               Text="Info"
+                               FontSize="14" FontWeight="Bold"
+                               Foreground="{StaticResource Accent}"
+                               TextWrapping="Wrap"
+                               Margin="2,2,2,6"/>
+                    <TextBlock DockPanel.Dock="Top" x:Name="LblInfoSubtitle"
+                               Text=""
+                               Foreground="{StaticResource TextMuted}"
+                               FontStyle="Italic"
+                               TextWrapping="Wrap"
+                               Margin="2,0,2,8"/>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <TextBlock x:Name="LblInfoBody"
+                                   Text="Click an item in the action library to see its BG-Wiki description, infobox stats, and notes."
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource TextMuted}"
+                                   Margin="2,0,2,2"/>
+                    </ScrollViewer>
+                </DockPanel>
             </Border>
         </Grid>
 

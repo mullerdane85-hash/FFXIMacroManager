@@ -91,12 +91,47 @@ namespace FFXIMacroManager.Data
         }
     }
 
+    // Single shared description record used for spells, JAs, and WSs.
+    // Sourced from BG-Wiki (spell_info.lua + the wikitext scraper); see
+    // tools/convert_spell_descriptions.py and tools/scrape_bgwiki_descriptions.py.
+    public sealed class ActionDescription
+    {
+        public string Name        = "";   // original casing for display
+        public string Kind        = "";   // "spell", "ja", "ws"
+        public string Description = "";   // 1-line intro
+        public string Type        = "";
+        public string Target      = "";
+        public string MpCost      = "";
+        public string TpCost      = "";
+        public string CastTime    = "";
+        public string RecastTime  = "";
+        public string Duration    = "";
+        public string Range       = "";
+        public string Skill       = "";
+        public string Level       = "";
+        public string Job         = "";
+        public string Element     = "";
+        public string Effect      = "";
+        public List<string> Notes = new List<string>();
+    }
+
     public static class SpellDb
     {
         public static Dictionary<int, Spell>       Spells       { get; private set; } = new Dictionary<int, Spell>();
         public static Dictionary<int, JobAbility>  Abilities    { get; private set; } = new Dictionary<int, JobAbility>();
         public static Dictionary<int, WeaponSkill> WeaponSkills { get; private set; } = new Dictionary<int, WeaponSkill>();
         public static Dictionary<int, JobInfo>     Jobs         { get; private set; } = new Dictionary<int, JobInfo>();
+        // Lowercase name -> description record. Same dict for spells / JAs / WSs.
+        public static Dictionary<string, ActionDescription> Descriptions
+            { get; private set; } = new Dictionary<string, ActionDescription>(StringComparer.OrdinalIgnoreCase);
+
+        // Returns null when the name isn't in the description set.
+        public static ActionDescription LookupDescription(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            ActionDescription d;
+            return Descriptions.TryGetValue(name, out d) ? d : null;
+        }
 
         public static string DataFolder { get; private set; } = "data";
         public static bool Loaded { get; private set; }
@@ -181,6 +216,52 @@ namespace FFXIMacroManager.Data
 
                 // ---- auto-translate names ----
                 AutoTranslateDb.LoadFromFile(Path.Combine(folder, "auto_translates.json"));
+
+                // ---- descriptions (optional; missing file is not fatal) ----
+                Descriptions.Clear();
+                var descPath = Path.Combine(folder, "descriptions.json");
+                if (File.Exists(descPath))
+                {
+                    var descRaw = jss.DeserializeObject(File.ReadAllText(descPath))
+                                  as Dictionary<string, object>;
+                    if (descRaw != null)
+                    {
+                        foreach (var kv in descRaw)
+                        {
+                            var d = kv.Value as Dictionary<string, object>;
+                            if (d == null) continue;
+                            var ad = new ActionDescription {
+                                Name        = ToStr(d, "name"),
+                                Kind        = ToStr(d, "kind"),
+                                Description = ToStr(d, "description"),
+                                Type        = ToStr(d, "type"),
+                                Target      = ToStr(d, "target"),
+                                MpCost      = ToStr(d, "mp_cost"),
+                                TpCost      = ToStr(d, "tp_cost"),
+                                CastTime    = ToStr(d, "cast_time"),
+                                RecastTime  = ToStr(d, "recast_time"),
+                                Duration    = ToStr(d, "duration"),
+                                Range       = ToStr(d, "range"),
+                                Skill       = ToStr(d, "skill"),
+                                Level       = ToStr(d, "level"),
+                                Job         = ToStr(d, "job"),
+                                Element     = ToStr(d, "element"),
+                                Effect      = ToStr(d, "effect"),
+                            };
+                            if (string.IsNullOrEmpty(ad.Name)) ad.Name = kv.Key;
+                            object notesObj;
+                            if (d.TryGetValue("notes", out notesObj))
+                            {
+                                var arr = notesObj as object[];
+                                if (arr != null)
+                                {
+                                    foreach (var n in arr) if (n != null) ad.Notes.Add(n.ToString());
+                                }
+                            }
+                            Descriptions[kv.Key] = ad;
+                        }
+                    }
+                }
 
                 Loaded = true;
                 LoadError = null;

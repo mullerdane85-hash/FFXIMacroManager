@@ -49,6 +49,14 @@ namespace FFXIMacroManager
 
         private Button[] _slotButtons = new Button[MacroFile.MACRO_COUNT];
 
+        // Whole-slot clipboard. Static so it survives page/book navigation.
+        // We snapshot the title + 6 line texts (NOT the raw byte buffers --
+        // those carry original-source identity which we want to discard on
+        // paste so the destination slot looks "freshly typed"). The paste
+        // path writes these into the target slot and marks it dirty.
+        private static string _clipboardTitle = null;
+        private static string[] _clipboardLines = null;
+
         // When true, ALL TextChanged handlers (TxtTitle and the 6 line
         // textboxes) short-circuit instead of running CommitEditorToModel
         // / dirty-tracking. We set this true around any programmatic
@@ -120,6 +128,13 @@ namespace FFXIMacroManager
             WireArrowKeyCycling(DdWeapon);    // weapon filter on the WS tab
             TxtSearch.TextChanged        += (_, __) => RefreshLibrary();
             LbLibrary.MouseDoubleClick   += LbLibrary_MouseDoubleClick;
+            LbLibrary.SelectionChanged   += LbLibrary_SelectionChanged;
+
+            // Copy / Paste whole-slot. Static clipboard, persists across
+            // page navigation so you can copy from Book 1 Page 3 and paste
+            // into Book 2 Page 5.
+            BtnCopySlot.Click  += BtnCopySlot_Click;
+            BtnPasteSlot.Click += BtnPasteSlot_Click;
 
             TxtTitle.TextChanged += TxtTitle_TextChanged;
 
@@ -1119,6 +1134,152 @@ namespace FFXIMacroManager
         // ------------------------------------------------------------------
         // macro selection / editor
         // ------------------------------------------------------------------
+        // ------------------------------------------------------------------
+        // Copy / Paste whole slot
+        // ------------------------------------------------------------------
+        private void BtnCopySlot_Click(object sender, RoutedEventArgs e)
+        {
+            if (_activeFile == null || _activeMacroIndex < 0 ||
+                _activeMacroIndex >= _activeFile.Macros.Count)
+            {
+                LblStatus.Text = "Copy: no slot selected.";
+                return;
+            }
+            // Make sure typed-but-unsaved edits in the editor are reflected.
+            CommitEditorToModel();
+            var m = _activeFile.Macros[_activeMacroIndex];
+            _clipboardTitle = m.Title ?? "";
+            _clipboardLines = new string[MacroFile.LINE_COUNT];
+            for (int i = 0; i < MacroFile.LINE_COUNT; i++)
+            {
+                _clipboardLines[i] = (i < m.Lines.Count) ? (m.Lines[i].Text ?? "") : "";
+            }
+            LblStatus.Text = "Copied " + m.HotkeyLabel
+                + " (\"" + _clipboardTitle + "\") -- now click another slot and press Paste.";
+        }
+
+        private void BtnPasteSlot_Click(object sender, RoutedEventArgs e)
+        {
+            if (_clipboardLines == null)
+            {
+                LblStatus.Text = "Paste: nothing copied yet.";
+                return;
+            }
+            if (_activeFile == null || _activeMacroIndex < 0 ||
+                _activeMacroIndex >= _activeFile.Macros.Count)
+            {
+                LblStatus.Text = "Paste: no destination slot selected.";
+                return;
+            }
+            var m = _activeFile.Macros[_activeMacroIndex];
+
+            // Write title into the model, then re-populate the editor from
+            // the model so the visible UI matches. We do NOT bypass the
+            // editor textboxes -- writing through them ensures TextChanged
+            // fires and dirty-tracking marks the slot for save.
+            _loading = true;
+            try
+            {
+                TxtTitle.Text = _clipboardTitle ?? "";
+                for (int i = 0; i < MacroFile.LINE_COUNT; i++)
+                {
+                    if (_lineBoxes[i] == null) continue;
+                    _lineBoxes[i].Text = (i < _clipboardLines.Length) ? (_clipboardLines[i] ?? "") : "";
+                    _lineBoxes[i].Tag  = true;   // mark as user-typed so commit picks it up
+                }
+            }
+            finally { _loading = false; }
+
+            // Commit immediately so the model + slot button update right away
+            // (Title text label, dirty marker, etc.). User still hits Save page
+            // to flush to disk.
+            CommitEditorToModel();
+            UpdateDirtyLabel();
+            RenderSlotButton(_activeMacroIndex);
+            LblStatus.Text = "Pasted into " + m.HotkeyLabel
+                + ". Press Save page to write to disk.";
+        }
+
+        // ------------------------------------------------------------------
+        // Action library -> info panel
+        // ------------------------------------------------------------------
+        private void LbLibrary_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // Library rows are ListBoxItems whose Tag is either an InsertSpec
+            // (spells / JAs / WSs -- the case we care about for descriptions)
+            // or a raw string snippet token (Targets tab). Only the InsertSpec
+            // path has a name we can look up in SpellDb.Descriptions.
+            var lbi = LbLibrary.SelectedItem as ListBoxItem;
+            if (lbi == null) { ClearInfoPanel(); return; }
+            var spec = lbi.Tag as InsertSpec;
+            if (spec == null || string.IsNullOrEmpty(spec.Name))
+            {
+                ClearInfoPanel();
+                return;
+            }
+            ShowDescriptionFor(spec.Name);
+        }
+
+        private void ClearInfoPanel()
+        {
+            LblInfoTitle.Text = "Info";
+            LblInfoSubtitle.Text = "";
+            LblInfoBody.Text = "Click an item in the action library to see its BG-Wiki description, infobox stats, and notes.";
+        }
+
+        private void ShowDescriptionFor(string name)
+        {
+            var d = FFXIMacroManager.Data.SpellDb.LookupDescription(name);
+            if (d == null)
+            {
+                LblInfoTitle.Text = name;
+                LblInfoSubtitle.Text = "";
+                LblInfoBody.Text = "No BG-Wiki description in the local cache for this entry. Re-run tools/scrape_bgwiki_descriptions.py to refresh.";
+                return;
+            }
+            LblInfoTitle.Text = d.Name;
+
+            // Subtitle = a compact summary of the most useful infobox bits.
+            var subs = new List<string>();
+            if (!string.IsNullOrEmpty(d.Type))    subs.Add(d.Type);
+            if (!string.IsNullOrEmpty(d.Target))  subs.Add(d.Target);
+            if (!string.IsNullOrEmpty(d.Element)) subs.Add(d.Element);
+            if (!string.IsNullOrEmpty(d.Skill))   subs.Add(d.Skill);
+            if (!string.IsNullOrEmpty(d.Job))     subs.Add(d.Job);
+            LblInfoSubtitle.Text = string.Join(" · ", subs);
+
+            var body = new System.Text.StringBuilder();
+            if (!string.IsNullOrEmpty(d.Description))
+            {
+                body.AppendLine(d.Description);
+                body.AppendLine();
+            }
+            AppendRow(body, "Level",       d.Level);
+            AppendRow(body, "MP cost",     d.MpCost);
+            AppendRow(body, "TP cost",     d.TpCost);
+            AppendRow(body, "Cast time",   d.CastTime);
+            AppendRow(body, "Recast",      d.RecastTime);
+            AppendRow(body, "Duration",    d.Duration);
+            AppendRow(body, "Range",       d.Range);
+            AppendRow(body, "Effect",      d.Effect);
+            if (d.Notes != null && d.Notes.Count > 0)
+            {
+                body.AppendLine();
+                body.AppendLine("Notes:");
+                foreach (var n in d.Notes)
+                {
+                    body.Append("  - ").AppendLine(n);
+                }
+            }
+            LblInfoBody.Text = body.ToString().TrimEnd();
+        }
+
+        private static void AppendRow(System.Text.StringBuilder body, string label, string value)
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            body.Append(label).Append(": ").AppendLine(value);
+        }
+
         private void SelectMacro(int idx)
         {
             // Wrap the whole population in try/catch + a top-level
