@@ -76,6 +76,17 @@ namespace FFXIMacroManager
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "FFXIMacroManager", "settings.txt");
 
+        // Last Target chosen for an action that can go on party members --
+        // e.g. <stal> -- so it does not have to be re-picked for every Cure.
+        // Kept apart from enemy-only actions on purpose: carrying <stal> over
+        // to Fire or Provoke would aim them at an ally.
+        private static readonly string MEMBER_TARGET_PATH = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "FFXIMacroManager", "member_target.txt");
+        private string _memberTarget = "<t>";
+        private bool   _settingTarget;       // true while WE move the dropdown
+        private InsertSpec _targetSpec;      // library entry the dropdown serves
+
         public MainWindow()
         {
             InitializeComponent();
@@ -125,6 +136,8 @@ namespace FFXIMacroManager
             WireArrowKeyCycling(DdJob);
             WireArrowKeyCycling(DdLibKind);   // bonus: cycle Spells/JA/WS/Targets
             WireArrowKeyCycling(DdTarget);    // bonus: cycle target tokens
+            _memberTarget = LoadMemberTarget();
+            DdTarget.SelectionChanged += DdTarget_SelectionChanged;
             WireArrowKeyCycling(DdWeapon);    // weapon filter on the WS tab
             TxtSearch.TextChanged        += (_, __) => RefreshLibrary();
             LbLibrary.MouseDoubleClick   += LbLibrary_MouseDoubleClick;
@@ -1476,26 +1489,82 @@ namespace FFXIMacroManager
         private void ApplyTargetDefault(InsertSpec spec)
         {
             if (DdTarget == null) return;
+            _targetSpec = spec;
             if (spec == null)
             {
                 DdTarget.IsEnabled = true;
                 DdTarget.ToolTip = null;
                 return;
             }
-            string want = spec.SelfOnly ? "<me>" : "<t>";
-            foreach (var o in DdTarget.Items)
-            {
-                var it = o as ComboBoxItem;
-                if (it != null && string.Equals(it.Tag as string, want, StringComparison.Ordinal))
-                {
-                    DdTarget.SelectedItem = it;
-                    break;
-                }
-            }
+
+            // Self-only -> <me>, locked. On party members -> the last target
+            // picked for such an action. Everything else (enemy-only) -> <t>.
+            string want = spec.SelfOnly     ? "<me>"
+                        : spec.OnMembers    ? _memberTarget
+                        : spec.SelfNotEnemy ? "<me>"
+                        : "<t>";
+            if (!SelectTargetTag(want)) SelectTargetTag("<t>");
+
             DdTarget.IsEnabled = !spec.SelfOnly;
             DdTarget.ToolTip = spec.SelfOnly
                 ? spec.Name + " can only be used on yourself, so the target is fixed to <me>."
-                : null;
+                : spec.OnMembers
+                    ? "Remembered for spells you can cast on party members. Change it once and it sticks."
+                    : spec.SelfNotEnemy
+                        ? spec.Name + " can't target an enemy, so it starts on <me>."
+                        : spec.Name + " can't be used on party members, so it starts on <t>.";
+        }
+
+        private bool SelectTargetTag(string tag)
+        {
+            foreach (var o in DdTarget.Items)
+            {
+                var it = o as ComboBoxItem;
+                if (it != null && string.Equals(it.Tag as string ?? "", tag ?? "", StringComparison.Ordinal))
+                {
+                    _settingTarget = true;
+                    try { DdTarget.SelectedItem = it; }
+                    finally { _settingTarget = false; }
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // The user picked a target. Remember it only for actions that can go
+        // on party members -- the only kind the remembered value is used for.
+        private void DdTarget_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_settingTarget) return;
+            if (_targetSpec == null || !_targetSpec.OnMembers) return;
+            var it = DdTarget.SelectedItem as ComboBoxItem;
+            if (it == null) return;
+            _memberTarget = it.Tag as string ?? "<t>";
+            SaveMemberTarget(_memberTarget);
+        }
+
+        private static string LoadMemberTarget()
+        {
+            try
+            {
+                if (File.Exists(MEMBER_TARGET_PATH))
+                {
+                    var v = File.ReadAllText(MEMBER_TARGET_PATH).Trim();
+                    if (v.Length > 0) return v;
+                }
+            }
+            catch { }
+            return "<t>";
+        }
+
+        private static void SaveMemberTarget(string tag)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(MEMBER_TARGET_PATH));
+                File.WriteAllText(MEMBER_TARGET_PATH, tag ?? "");
+            }
+            catch { /* a lost preference is not worth interrupting an edit for */ }
         }
 
         private string SelectedTargetToken()
@@ -1724,6 +1793,22 @@ namespace FFXIMacroManager
             // Windower targets bitmask (see Spell.Targets). 1 = self only.
             public int    Targets;
             public bool   SelfOnly { get { return Targets == 1; } }
+
+            // Usable on party members: the Party (4) or Ally (8) bit. Cure (63),
+            // Haste (29), Curaga (5), Devotion (4) and Raise (157) qualify.
+            //
+            // Deliberately NOT the Player bit (2). The 127 entries carrying it
+            // without Party/Ally are pet orders (Ready moves, Snarl, Spur),
+            // Reward and Spirit Bond -- "you or a player, never an enemy" --
+            // and giving them a remembered <stal> would be wrong.
+            public bool   OnMembers { get { return !SelfOnly && (Targets & (4 | 8)) != 0; } }
+
+            // You are a legal target but an enemy is not (targets 3): pet
+            // orders, Reward, Spirit Bond. <me> is always valid for these and
+            // <t> on a mob would be refused, so they start on <me> -- which is
+            // also how BST Ready-move macros are normally written.
+            public bool   SelfNotEnemy { get { return !SelfOnly && !OnMembers
+                                                  && (Targets & 1) != 0 && (Targets & 32) == 0; } }
         }
 
         private void LbLibrary_MouseDoubleClick(object sender, MouseButtonEventArgs e)

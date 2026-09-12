@@ -105,13 +105,20 @@ Auto-translate codes (`{AT:cat/kind/id}`) round-trip too.
   replacing it.
 
 - **Target defaults.** Clicking a spell or ability sets the Target
-  dropdown for you. Anything that can only be used on yourself (Stoneskin,
-  Indi- spells, Berserk, Sublimation...) gets `<me>` and the dropdown is
-  locked, since no other target is legal. Anything usable on someone else
-  defaults to `<t>` and you can still change it -- pick `<stpc>` for a Cure
-  and it sticks. This comes from the `targets` field in Windower's
-  `res/spells.lua` and `res/job_abilities.lua`, carried into `data/` by
-  `tools/generate-data.sh`.
+  dropdown for you, from the `targets` field in Windower's
+  `res/spells.lua` and `res/job_abilities.lua` (carried into `data/` by
+  `tools/generate-data.sh`):
+
+  | Kind | Target |
+  |---|---|
+  | Self only (Stoneskin, Indi-, Berserk, Sublimation) | `<me>`, locked |
+  | Can go on party members (Cure, Haste, Raise, Cursna, Devotion) | **your last pick for these** -- choose `<stal>` once and every Cure after it uses `<stal>`, even after a restart |
+  | Can't target an enemy (pet orders, Reward, Spirit Bond) | `<me>`, changeable |
+  | Everything else (nukes, Dia, Provoke, weapon skills) | `<t>` |
+
+  The remembered pick only applies to the party-member kind, so it can
+  never turn a Fire or a Provoke into `<stal>`. It is stored in
+  `%APPDATA%\FFXIMacroManager\member_target.txt`.
 
 - **Save page** writes the whole 20-macro page back. Slots you didn't
   touch preserve their raw bytes (auto-translate codes included). Saving
