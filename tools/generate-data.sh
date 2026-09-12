@@ -74,8 +74,13 @@ function jescape(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return s }
         }
     }
 
-    rec[id] = sprintf("\"%s\":{\"id\":%s,\"en\":\"%s\",\"prefix\":\"%s\",\"type\":\"%s\",\"unlearnable\":%s,\"levels\":{%s}}",
-                      id, id, jescape(en), jescape(pre), jescape(ty), unl, lv)
+    # targets=N -- the Windower bitmask of who it may be used on:
+    # 1 Self, 2 Player, 4 Party, 8 Ally, 16 NPC, 32 Enemy (and higher bits
+    # for corpses). Drives the macro target default: 1 alone means <me>.
+    tg = 0
+    if (match(line, /[,{]targets=([0-9]+)/, a)) tg = a[1]
+    rec[id] = sprintf("\"%s\":{\"id\":%s,\"en\":\"%s\",\"prefix\":\"%s\",\"type\":\"%s\",\"unlearnable\":%s,\"targets\":%s,\"levels\":{%s}}",
+                      id, id, jescape(en), jescape(pre), jescape(ty), unl, tg, lv)
     order[++count] = id
 }
 END {
@@ -104,8 +109,13 @@ function jescape(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return s }
     if (match(line, /prefix="([^"]*)"/, a)) pre = a[1]
     ty = ""
     if (match(line, /type="([^"]*)"/, a)) ty = a[1]
-    rec[id] = sprintf("\"%s\":{\"id\":%s,\"en\":\"%s\",\"prefix\":\"%s\",\"type\":\"%s\"}",
-                      id, id, jescape(en), jescape(pre), jescape(ty))
+    # targets=N -- the Windower bitmask of who it may be used on:
+    # 1 Self, 2 Player, 4 Party, 8 Ally, 16 NPC, 32 Enemy (and higher bits
+    # for corpses). Drives the macro target default: 1 alone means <me>.
+    tg = 0
+    if (match(line, /[,{]targets=([0-9]+)/, a)) tg = a[1]
+    rec[id] = sprintf("\"%s\":{\"id\":%s,\"en\":\"%s\",\"prefix\":\"%s\",\"type\":\"%s\",\"targets\":%s}",
+                      id, id, jescape(en), jescape(pre), jescape(ty), tg)
     order[++count] = id
 }
 END {

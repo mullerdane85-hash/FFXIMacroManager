@@ -20,6 +20,17 @@ namespace FFXIMacroManager.Data
         public bool   Unlearnable;
         public Dictionary<int,int> Levels = new Dictionary<int,int>(); // job_id -> level
 
+        /// <summary>
+        /// Windower's "targets" bitmask: 1 Self, 2 Player, 4 Party, 8 Ally,
+        /// 16 NPC, 32 Enemy, plus higher bits for corpses. 0 means the data
+        /// predates the field -- treated as "not self-only" so nothing gets
+        /// wrongly locked.
+        /// </summary>
+        public int Targets;
+
+        /// <summary>Usable only on yourself, so its macro target is always &lt;me&gt;.</summary>
+        public bool SelfOnly { get { return Targets == 1; } }
+
         public int LearnLevelFor(int jobId)
         {
             int lv;
@@ -60,6 +71,17 @@ namespace FFXIMacroManager.Data
         public string En     = "";
         public string Prefix = "";
         public string Type   = "";
+
+        /// <summary>
+        /// Windower's "targets" bitmask: 1 Self, 2 Player, 4 Party, 8 Ally,
+        /// 16 NPC, 32 Enemy, plus higher bits for corpses. 0 means the data
+        /// predates the field -- treated as "not self-only" so nothing gets
+        /// wrongly locked.
+        /// </summary>
+        public int Targets;
+
+        /// <summary>Usable only on yourself, so its macro target is always &lt;me&gt;.</summary>
+        public bool SelfOnly { get { return Targets == 1; } }
 
         public string MacroCommand()
         {
@@ -158,6 +180,7 @@ namespace FFXIMacroManager.Data
                         Prefix      = ToStr(d, "prefix"),
                         Type        = ToStr(d, "type"),
                         Unlearnable = ToBool(d, "unlearnable"),
+                        Targets     = ToInt(d, "targets"),
                     };
                     var lvDict = d.ContainsKey("levels") ? d["levels"] as Dictionary<string, object> : null;
                     if (lvDict != null)
@@ -180,6 +203,7 @@ namespace FFXIMacroManager.Data
                         En     = ToStr(d, "en"),
                         Prefix = ToStr(d, "prefix"),
                         Type   = ToStr(d, "type"),
+                        Targets = ToInt(d, "targets"),
                     };
                     Abilities[a.Id] = a;
                 }

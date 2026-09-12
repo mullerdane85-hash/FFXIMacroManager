@@ -1210,8 +1210,9 @@ namespace FFXIMacroManager
             // or a raw string snippet token (Targets tab). Only the InsertSpec
             // path has a name we can look up in SpellDb.Descriptions.
             var lbi = LbLibrary.SelectedItem as ListBoxItem;
-            if (lbi == null) { ClearInfoPanel(); return; }
+            if (lbi == null) { ClearInfoPanel(); ApplyTargetDefault(null); return; }
             var spec = lbi.Tag as InsertSpec;
+            ApplyTargetDefault(spec);
             if (spec == null || string.IsNullOrEmpty(spec.Name))
             {
                 ClearInfoPanel();
@@ -1462,6 +1463,41 @@ namespace FFXIMacroManager
         // ------------------------------------------------------------------
         // library pane
         // ------------------------------------------------------------------
+        /// <summary>
+        /// Default the Target dropdown for the library entry just selected.
+        /// </summary>
+        /// <remarks>
+        /// Self-only (Windower targets == 1: Stoneskin, Indi-, Berserk,
+        /// Sublimation...) selects &lt;me&gt; and locks the dropdown, because
+        /// no other target is legal and the game would reject the macro.
+        /// Anything usable on someone else defaults to &lt;t&gt; and stays
+        /// editable. Non-action rows (target tokens, snippets) just unlock.
+        /// </remarks>
+        private void ApplyTargetDefault(InsertSpec spec)
+        {
+            if (DdTarget == null) return;
+            if (spec == null)
+            {
+                DdTarget.IsEnabled = true;
+                DdTarget.ToolTip = null;
+                return;
+            }
+            string want = spec.SelfOnly ? "<me>" : "<t>";
+            foreach (var o in DdTarget.Items)
+            {
+                var it = o as ComboBoxItem;
+                if (it != null && string.Equals(it.Tag as string, want, StringComparison.Ordinal))
+                {
+                    DdTarget.SelectedItem = it;
+                    break;
+                }
+            }
+            DdTarget.IsEnabled = !spec.SelfOnly;
+            DdTarget.ToolTip = spec.SelfOnly
+                ? spec.Name + " can only be used on yourself, so the target is fixed to <me>."
+                : null;
+        }
+
         private string SelectedTargetToken()
         {
             var it = DdTarget == null ? null : DdTarget.SelectedItem as ComboBoxItem;
@@ -1560,7 +1596,11 @@ namespace FFXIMacroManager
         // is appended when the Wait stepper is non-zero.
         private string ComposeCommand(string prefix, string actionName)
         {
-            string target = SelectedTargetToken();
+            return ComposeCommandFor(prefix, actionName, SelectedTargetToken());
+        }
+
+        private string ComposeCommandFor(string prefix, string actionName, string target)
+        {
             string head = prefix + " \"" + actionName + "\"";
             string body = string.IsNullOrEmpty(target) ? head : (head + " " + target);
             return body + WaitSuffix();
@@ -1607,7 +1647,7 @@ namespace FFXIMacroManager
 
                     LbLibrary.Items.Add(new ListBoxItem {
                         Content = label,
-                        Tag = new InsertSpec { Prefix = pre, Name = s.En },
+                        Tag = new InsertSpec { Prefix = pre, Name = s.En, Targets = s.Targets },
                     });
                 }
             }
@@ -1623,7 +1663,7 @@ namespace FFXIMacroManager
                     if (string.IsNullOrEmpty(pre)) pre = "/ja";
                     LbLibrary.Items.Add(new ListBoxItem {
                         Content = a.En + "   (" + a.Type + ")",
-                        Tag = new InsertSpec { Prefix = pre, Name = a.En },
+                        Tag = new InsertSpec { Prefix = pre, Name = a.En, Targets = a.Targets },
                     });
                 }
             }
@@ -1640,7 +1680,7 @@ namespace FFXIMacroManager
                     if (weaponId >= 0 && w.Skill != weaponId) continue;
                     LbLibrary.Items.Add(new ListBoxItem {
                         Content = w.En,
-                        Tag = new InsertSpec { Prefix = "/ws", Name = w.En },
+                        Tag = new InsertSpec { Prefix = "/ws", Name = w.En, Targets = 32 },
                     });
                 }
             }
@@ -1680,6 +1720,10 @@ namespace FFXIMacroManager
         {
             public string Prefix = "/ma";
             public string Name   = "";
+
+            // Windower targets bitmask (see Spell.Targets). 1 = self only.
+            public int    Targets;
+            public bool   SelfOnly { get { return Targets == 1; } }
         }
 
         private void LbLibrary_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -1701,7 +1745,12 @@ namespace FFXIMacroManager
             var spec = item.Tag as InsertSpec;
             if (spec != null)
             {
-                box.Text = ComposeCommand(spec.Prefix, spec.Name);
+                // Self-only actions always get <me>, whatever the dropdown
+                // happens to show. Anything else uses the dropdown, so a
+                // deliberate choice like <stpc> for a Cure is respected.
+                box.Text = spec.SelfOnly
+                    ? ComposeCommandFor(spec.Prefix, spec.Name, "<me>")
+                    : ComposeCommand(spec.Prefix, spec.Name);
                 // Auto-fill the macro title with an abbreviated form of the
                 // ability name -- BUT only when the title is empty or still
                 // shows the previous auto-default. We never overwrite a user

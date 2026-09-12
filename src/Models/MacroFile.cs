@@ -101,6 +101,10 @@ namespace FFXIMacroManager.Models
             var bytes = new byte[FILE_SIZE];
             Array.Copy(RawHeader, 0, bytes, 0, HEADER_SIZE);
 
+            // Exactly what each line wrote, applied as its new baseline only
+            // once the file is safely on disk (see the end of this method).
+            var written = new List<KeyValuePair<MacroLine, byte[]>>();
+
             for (int i = 0; i < MACRO_COUNT && i < Macros.Count; i++)
             {
                 var m = Macros[i];
@@ -112,6 +116,7 @@ namespace FFXIMacroManager.Models
                     int lineStart = macroStart + MACRO_RESERVED + line * LINE_SIZE;
                     var buf = m.Lines[line].ToBytes(LINE_SIZE);
                     Array.Copy(buf, 0, bytes, lineStart, LINE_SIZE);
+                    written.Add(new KeyValuePair<MacroLine, byte[]>(m.Lines[line], buf));
                 }
 
                 // RawTitle holds the original 10 bytes verbatim; the Title
@@ -144,6 +149,18 @@ namespace FFXIMacroManager.Models
                 File.Move(path, bak);
             }
             File.Move(tmp, path);
+
+            // What is on disk is now the baseline for every line.
+            //
+            // ToBytes() writes a clean line's OriginalBytes rather than its
+            // text, to keep auto-translate codes byte-exact. OriginalBytes
+            // used to be set only when the page was LOADED, and after a save
+            // the lines were marked clean -- so the NEXT save of the same page
+            // wrote every previously-saved line back to its load-time bytes.
+            // Line edits silently reverted while titles (which always write
+            // their current value) stuck: "it only saves the titles". Worse,
+            // a line typed into an empty slot was blanked again.
+            foreach (var kv in written) kv.Key.MarkSaved(kv.Value);
         }
     }
 
@@ -201,6 +218,21 @@ namespace FFXIMacroManager.Models
         {
             OriginalBytes = raw;
             Text          = Decode(raw);
+        }
+
+        /// <summary>
+        /// Record the bytes just written to disk as this line's baseline and
+        /// clear the dirty flag. Called by MacroFile.Save after the file is
+        /// in place, so a later save of an untouched line reproduces what is
+        /// actually on disk, not what was there when the page was opened.
+        /// </summary>
+        internal void MarkSaved(byte[] writtenBytes)
+        {
+            // Text is left as the user typed it: it is what produced these
+            // bytes, and re-decoding could normalise it and make an untouched
+            // line compare as edited on the next commit.
+            OriginalBytes = writtenBytes;
+            Dirty         = false;
         }
 
         public bool IsEmpty { get { return string.IsNullOrEmpty(Text); } }

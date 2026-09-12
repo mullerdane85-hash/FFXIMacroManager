@@ -104,8 +104,20 @@ Auto-translate codes (`{AT:cat/kind/id}`) round-trip too.
   `<me>`, `<t>`, `<wait 3>` that append to the current line instead of
   replacing it.
 
+- **Target defaults.** Clicking a spell or ability sets the Target
+  dropdown for you. Anything that can only be used on yourself (Stoneskin,
+  Indi- spells, Berserk, Sublimation...) gets `<me>` and the dropdown is
+  locked, since no other target is legal. Anything usable on someone else
+  defaults to `<t>` and you can still change it -- pick `<stpc>` for a Cure
+  and it sticks. This comes from the `targets` field in Windower's
+  `res/spells.lua` and `res/job_abilities.lua`, carried into `data/` by
+  `tools/generate-data.sh`.
+
 - **Save page** writes the whole 20-macro page back. Slots you didn't
-  touch preserve their raw bytes (auto-translate codes included).
+  touch preserve their raw bytes (auto-translate codes included). Saving
+  the same page more than once is safe: before v1.7 a second save wrote
+  earlier line edits back to how the page looked when it was opened, so
+  only titles appeared to stick.
 
 ## Binary format (what the editor speaks)
 
